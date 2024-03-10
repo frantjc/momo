@@ -61,12 +61,18 @@ function run() {
                 });
                 if (packageVersion) {
                     yield octokit.rest.packages.deletePackageVersionForUser({
-                        package_type: "docker",
+                        package_type: "container",
                         package_name: "momo",
                         username: "frantjc",
-                        package_version_id: packageVersion === null || packageVersion === void 0 ? void 0 : packageVersion.id,
+                        package_version_id: packageVersion.id,
                     });
                 }
+                else {
+                    throw new Error("unable to find package version ID");
+                }
+            }
+            else {
+                throw new Error("unable to find GITHUB_SHA");
             }
         }
         catch (err) {

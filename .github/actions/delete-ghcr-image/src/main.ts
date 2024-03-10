@@ -22,12 +22,16 @@ async function run(): Promise<void> {
 
       if (packageVersion) {
         await octokit.rest.packages.deletePackageVersionForUser({
-          package_type: "docker",
+          package_type: "container",
           package_name: "momo",
           username: "frantjc",
-          package_version_id: packageVersion?.id,
+          package_version_id: packageVersion.id,
         });
+      } else {
+        throw new Error("unable to find package version ID");
       }
+    } else {
+      throw new Error("unable to find GITHUB_SHA");
     }
   } catch (err) {
     if (typeof err === "string" || err instanceof Error) {
