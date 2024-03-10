@@ -5,7 +5,7 @@ go 1.21.4
 require (
 	github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f
 	github.com/go-chi/chi/v5 v5.0.12
-	github.com/go-logr/logr v1.3.0
+	github.com/go-logr/logr v1.4.1
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.8.0
