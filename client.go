@@ -117,7 +117,7 @@ func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType stri
 		return err
 	}
 
-	if !strings.EqualFold(contentType, "applicatoin/x-gzip") && !strings.EqualFold(contentType, "applicaiton/x-tar") {
+	if !strings.EqualFold(contentType, "application/x-gzip") && !strings.EqualFold(contentType, "application/x-tar") {
 		return fmt.Errorf("invalid Content-Type %s", contentType)
 	}
 
