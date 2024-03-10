@@ -60,9 +60,9 @@ function run() {
                     if (sparts.length < 3) {
                         throw new Error(`invalid tag ${tag}`);
                     }
-                    const [registry, username, ...rest] = sparts[0];
+                    const [registry, username, ...rest] = sparts;
                     if (registry !== "ghcr.io") {
-                        throw new Error("tags must refer to ghcr.io");
+                        throw new Error(`tags must refer to ghcr.io, got ${tag}`);
                     }
                     const package_name = rest.join("/");
                     const _tag = cparts[1];
@@ -110,7 +110,7 @@ function run() {
                 core.setFailed(err);
             }
             else {
-                core.setFailed("caught unknown error");
+                core.setFailed(`caught unknown error ${err}`);
             }
         }
     });
