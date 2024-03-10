@@ -41,38 +41,68 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const octokit_1 = __nccwpck_require__(7467);
+const package_type = "container";
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const octokit = new octokit_1.Octokit({
-                auth: process.env.GITHUB_TOKEN,
+                auth: core.getInput("token", {
+                    required: true,
+                }),
             });
-            const packageVersions = yield octokit.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
-                state: "active",
-                package_type: "container",
-                package_name: "momo",
-                username: "frantjc",
+            const tags = core.getMultilineInput("tags", {
+                required: true,
             });
-            const githubSha = process.env.GITHUB_SHA;
-            if (githubSha) {
-                const packageVersion = packageVersions.data.find(packageVersion => {
-                    var _a, _b;
-                    return (_b = (_a = packageVersion.metadata) === null || _a === void 0 ? void 0 : _a.container) === null || _b === void 0 ? void 0 : _b.tags.includes(githubSha);
-                });
-                if (packageVersion) {
-                    yield octokit.rest.packages.deletePackageVersionForUser({
-                        package_type: "container",
-                        package_name: "momo",
-                        username: "frantjc",
-                        package_version_id: packageVersion.id,
+            for (const tag in tags) {
+                const cparts = tag.split(":");
+                if (cparts.length == 2) {
+                    const sparts = cparts[0].split("/");
+                    if (sparts.length < 3) {
+                        throw new Error(`invalid tag ${tag}`);
+                    }
+                    const [registry, username, ...rest] = sparts[0];
+                    if (registry !== "ghcr.io") {
+                        throw new Error("tags must refer to ghcr.io");
+                    }
+                    const package_name = rest.join("/");
+                    const _tag = cparts[1];
+                    if (!username || !package_name || !_tag) {
+                        throw new Error(`invalid tag ${tag}`);
+                    }
+                    const packageVersions = yield octokit.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                        state: "active",
+                        package_type,
+                        package_name,
+                        username,
                     });
+                    const packageVersion = packageVersions.data.find((packageVersion) => {
+                        var _a, _b;
+                        return (_b = (_a = packageVersion.metadata) === null || _a === void 0 ? void 0 : _a.container) === null || _b === void 0 ? void 0 : _b.tags.includes(_tag);
+                    });
+                    if (packageVersion) {
+                        if (packageVersions.data.length === 1) {
+                            yield octokit.rest.packages.deletePackageForUser({
+                                package_type,
+                                package_name,
+                                username,
+                            });
+                        }
+                        else {
+                            yield octokit.rest.packages.deletePackageVersionForUser({
+                                package_type,
+                                package_name,
+                                username,
+                                package_version_id: packageVersion.id,
+                            });
+                        }
+                    }
+                    else {
+                        throw new Error("unable to find package version ID");
+                    }
                 }
                 else {
-                    throw new Error("unable to find package version ID");
+                    throw new Error(`invalid tag ${tag}`);
                 }
-            }
-            else {
-                throw new Error("unable to find GITHUB_SHA");
             }
         }
         catch (err) {

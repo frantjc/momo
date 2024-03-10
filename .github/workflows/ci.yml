@@ -52,9 +52,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           momo --version
-      - uses: ./.github/actions/delete-ghcr-image
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
+      - uses: ./.github/actions/delete-ghcr-images
+        with:
+          token: ${{ secrets.PAT }}
+          tags: |
+            ghcr.io/frantjc/momo:${{ github.sha }}
       - name: Run momo upload app
         run: |
           momo upload app --url http://momo:8080/ test testdata/test.apk

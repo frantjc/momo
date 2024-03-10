@@ -1,0 +1,19 @@
+name: Delete GHCR Images
+description: |
+  Delete GHCR Images
+author: frantjc
+branding:
+  color: yellow
+  icon: box
+inputs:
+  token:
+    description: |
+      GitHub token to authenticate with. Must have delete:packages scope.
+    default: ${{ github.token }}
+  tags:
+    description: |
+      GHCR tags to delete.
+    required: true
+runs:
+  using: node20
+  main: dist/index.js
