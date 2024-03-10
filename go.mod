@@ -1,6 +1,6 @@
 module github.com/frantjc/momo
 
-go 1.21.4
+go 1.22.0
 
 require (
 	github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f

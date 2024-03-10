@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine3.19 AS build
+FROM golang:1.22-alpine3.19 AS build
 WORKDIR $GOPATH/github.com/frantjc/momo
 COPY go.mod go.sum ./
 RUN go mod download
