@@ -53,7 +53,7 @@ jobs:
             ghcr.io/frantjc/momo:${{ github.sha }}
       - name: Run momo upload app
         run: |
-          momo upload app --url http://momo:8080/ test testdata/test.apk testdata/ipa
+          momo upload app --url http://momo:8080/ test testdata/test.apk testdata/test.ipa
           sleep 9
       - name: Run momo get apps
         run: |
