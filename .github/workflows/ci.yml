@@ -53,5 +53,5 @@ jobs:
           momo upload app test testdata/test.apk
       - name: Run momo get app
         run: |
-          sleep 11
+          sleep 9
           momo get app test

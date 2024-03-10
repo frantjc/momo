@@ -93,7 +93,7 @@ func NewMomo() *cobra.Command {
 					log.Info("opening postgres")
 					db, err = postgres.Open(ctx, dburlstr)
 					return err
-				}, 5); err != nil {
+				}, 9); err != nil {
 					return err
 				}
 				defer db.Close()
