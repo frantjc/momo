@@ -3,13 +3,16 @@ on:
   push:
     branches:
       - main
+permissions:
+  contents: read
+  packages: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: docker/build-push-action@v5
         with:
-          load: true
+          push: true
           tags: |
             ghcr.io/frantjc/momo:${{ github.sha }}
   test:
@@ -27,12 +30,18 @@ jobs:
           POSTGRES_USER: momo
           POSTGRES_PASSWORD: momo
       momo:
-        image: ghcr.io/frantjc/momo:${{ github.sha }}
+        image: ghcr.io/${{ github.owner }}/momo:${{ github.sha }}
         ports:
           - 8080:8080
         env:
           MOMO_DB_URL: postgres://momo:momo@postgres?sslmode=disable
     steps:
+      - uses: bots-house/ghcr-delete-image-action@v1.1.0
+        with:
+          owner: ${{ github.repository_owner }}
+          name: momo
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.sha }}
       - uses: actions/checkout@v4
       - run: |
           momo --version
