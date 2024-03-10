@@ -89,8 +89,8 @@ func NewMomo() *cobra.Command {
 					dburlstr = os.Getenv("MOMO_DB_URL")
 				}
 
+				log.Info("opening postgres " + dburlstr)
 				if err = retry(func() error {
-					log.Info("opening postgres " + dburlstr)
 					db, err = postgres.Open(ctx, dburlstr)
 					return err
 				}, 9); err != nil {
