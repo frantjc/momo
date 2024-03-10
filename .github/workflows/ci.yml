@@ -33,9 +33,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
       momo:
         image: ghcr.io/frantjc/momo:${{ github.sha }}
         ports:
@@ -45,9 +42,6 @@ jobs:
           MOMO_VERBOSE: "1"
         options: >-
           --health-cmd "wget http://localhost:8080/readyz"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -59,8 +53,11 @@ jobs:
             ghcr.io/frantjc/momo:${{ github.sha }}
       - name: Run momo upload app
         run: |
-          momo upload app --url http://momo:8080/ test testdata/test.apk
+          momo upload app --url http://momo:8080/ test testdata/test.apk testdata/ipa
+          sleep 9
       - name: Run momo get app
         run: |
-          sleep 9
           momo get app --url http://momo:8080/ test
+      - name: Run momo get apps
+        run: |
+          momo get apps --url http://momo:8080/
