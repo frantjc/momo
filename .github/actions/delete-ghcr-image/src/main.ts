@@ -5,7 +5,9 @@ async function run(): Promise<void> {
   try {
     throw new Error("TODO");
 
-    const octokit = new Octokit({});
+    const octokit = new Octokit({
+      auth: process.env.GITHUB_TOKEN,
+    });
 
     const res = await octokit.rest.packages.deletePackageForOrg({
       package_type: "container",

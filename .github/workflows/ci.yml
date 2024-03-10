@@ -34,6 +34,8 @@ jobs:
           POSTGRES_DB: momo
           POSTGRES_USER: momo
           POSTGRES_PASSWORD: momo
+        options: |
+          --health-cmd "pg_isready -d momo -U momo"
       momo:
         image: ghcr.io/frantjc/momo:${{ github.sha }}
         ports:
