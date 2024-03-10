@@ -6,5 +6,5 @@ branding:
   color: yellow
   icon: box
 runs:
-  using: node18
+  using: node20
   main: dist/index.js
