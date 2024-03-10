@@ -7,12 +7,28 @@ async function run(): Promise<void> {
       auth: process.env.GITHUB_TOKEN,
     });
 
-    const res = await octokit.rest.packages.deletePackageForOrg({
-      package_type: "docker",
+    const packageVersions = await octokit.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+      state: "active",
+      package_type: "container",
       package_name: "momo",
-      org: "frantjc",
-      package_version_id: 0, // TODO.
+      username: "frantjc",
     });
+
+    const githubSha = process.env.GITHUB_SHA;
+    if (githubSha) {
+      const packageVersion = packageVersions.data.find(packageVersion => {
+        return packageVersion.metadata?.container?.tags.includes(githubSha);
+      });
+
+      if (packageVersion) {
+        await octokit.rest.packages.deletePackageForUser({
+          package_type: "docker",
+          package_name: "momo",
+          username: "frantjc",
+          package_version_id: packageVersion?.id,
+        });
+      }
+    }
   } catch (err) {
     if (typeof err === "string" || err instanceof Error) {
       core.setFailed(err);

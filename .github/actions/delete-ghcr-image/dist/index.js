@@ -44,17 +44,38 @@ const octokit_1 = __nccwpck_require__(7467);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const octokit = new octokit_1.Octokit({});
-            const res = yield octokit.rest.packages.deletePackageForOrg({
+            const octokit = new octokit_1.Octokit({
+                auth: process.env.GITHUB_TOKEN,
+            });
+            const packageVersions = yield octokit.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                state: "active",
                 package_type: "container",
                 package_name: "momo",
-                org: "frantjc",
-                package_version_id: 0, // TODO.
+                username: "frantjc",
             });
+            const githubSha = process.env.GITHUB_SHA;
+            if (githubSha) {
+                const packageVersion = packageVersions.data.find(packageVersion => {
+                    var _a, _b;
+                    return (_b = (_a = packageVersion.metadata) === null || _a === void 0 ? void 0 : _a.container) === null || _b === void 0 ? void 0 : _b.tags.includes(githubSha);
+                });
+                if (packageVersion) {
+                    yield octokit.rest.packages.deletePackageForUser({
+                        package_type: "docker",
+                        package_name: "momo",
+                        username: "frantjc",
+                        package_version_id: packageVersion === null || packageVersion === void 0 ? void 0 : packageVersion.id,
+                    });
+                }
+            }
         }
         catch (err) {
-            if (typeof err === "string" || err instanceof Error)
+            if (typeof err === "string" || err instanceof Error) {
                 core.setFailed(err);
+            }
+            else {
+                core.setFailed("caught unknown error");
+            }
         }
     });
 }

@@ -49,14 +49,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      # TODO: Clean up image.
+      - uses: ${{ github.repository }}/.github/actions/delete-ghcr-image@${{ github.sha }}
       - uses: actions/checkout@v4
       - run: |
           momo --version
       - name: Run momo upload app
         run: |
-          momo upload app test testdata/test.apk
+          momo upload app --url http://momo:8080/ test testdata/test.apk
       - name: Run momo get app
         run: |
           sleep 9
-          momo get app test
+          momo get app --url http://momo:8080/ test
