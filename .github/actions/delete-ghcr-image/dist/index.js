@@ -60,7 +60,7 @@ function run() {
                     return (_b = (_a = packageVersion.metadata) === null || _a === void 0 ? void 0 : _a.container) === null || _b === void 0 ? void 0 : _b.tags.includes(githubSha);
                 });
                 if (packageVersion) {
-                    yield octokit.rest.packages.deletePackageForUser({
+                    yield octokit.rest.packages.deletePackageVersionForUser({
                         package_type: "docker",
                         package_name: "momo",
                         username: "frantjc",

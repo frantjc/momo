@@ -21,7 +21,7 @@ async function run(): Promise<void> {
       });
 
       if (packageVersion) {
-        await octokit.rest.packages.deletePackageForUser({
+        await octokit.rest.packages.deletePackageVersionForUser({
           package_type: "docker",
           package_name: "momo",
           username: "frantjc",
