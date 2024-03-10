@@ -1,0 +1,10 @@
+name: Delete GHCR Image
+description: |
+  Delete a GHCR Image
+author: frantjc
+branding:
+  color: yellow
+  icon: box
+runs:
+  using: node16
+  main: dist/index.js
