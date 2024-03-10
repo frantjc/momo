@@ -41,7 +41,7 @@ jobs:
         env:
           MOMO_DB_URL: postgres://momo:momo@postgres?sslmode=disable
           MOMO_VERBOSE: "1"
-        option: |
+        options: |
           --health-cmd "ping localhost:8080"
     steps:
       # TODO: Clean up image.
