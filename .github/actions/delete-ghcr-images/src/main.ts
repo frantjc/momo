@@ -15,7 +15,7 @@ async function run(): Promise<void> {
       required: true,
     });
 
-    for (const tag in tags) {
+    for (const tag of tags) {
       const cparts = tag.split(":");
 
       if (cparts.length == 2) {

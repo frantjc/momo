@@ -53,7 +53,7 @@ function run() {
             const tags = core.getMultilineInput("tags", {
                 required: true,
             });
-            for (const tag in tags) {
+            for (const tag of tags) {
                 const cparts = tag.split(":");
                 if (cparts.length == 2) {
                     const sparts = cparts[0].split("/");
