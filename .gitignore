@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# iOS
+Payload/
+
+# IDE
+.vscode/
+
+# goreleaser
+dist/
+
+# go
+vendor/

@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+
+# goreleaser
+dist/
+
+# go
+vendor/
+
+# GitHub
+.github/
+
+# Docker
+*Dockerfile
+*compose.*
+
+# misc
+.*
+hack/
+*.md

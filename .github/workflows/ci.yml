@@ -1,0 +1,44 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/build-push-action@@v5
+        with:
+          load: true
+          tags: |
+            ghcr.io/frantjc/momo:${{ github.sha }}
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/frantjc/momo:${{ github.sha }}
+    services:
+      postgres:
+        image: postgres:alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: momo
+          POSTGRES_USER: momo
+          POSTGRES_PASSWORD: momo
+      momo:
+        image: ghcr.io/frantjc/momo:${{ github.sha }}
+        ports:
+          - 8080:8080
+        env:
+          MOMO_DB_URL: postgres://momo:momo@postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          momo --version
+      - name: Run momo upload app
+        run: |
+          momo upload app test testdata/test.apk
+      - name: Run momo get app
+        run: |
+          sleep 11
+          momo get app test

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" android:compileSdkVersion="34" android:compileSdkVersionCodename="VanillaIceCream" package="com.afwsamples.testdpc" platformBuildVersionCode="34" platformBuildVersionName="VanillaIceCream">
+    <uses-permission android:name="android.permission.GET_ACCOUNTS"/>
+    <uses-permission android:name="android.permission.MANAGE_ACCOUNTS"/>
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.REQUEST_PASSWORD_COMPLEXITY"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+    <uses-permission android:name="com.google.android.setupwizard.SETUP_COMPAT_SERVICE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-feature android:name="android.hardware.wifi" android:required="false"/>
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
+    <permission android:name="com.afwsamples.testdpc.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/>
+    <application android:allowBackup="true" android:appComponentFactory="androidx.core.app.CoreComponentFactory" android:banner="@drawable/ic_launcher" android:icon="@drawable/ic_launcher" android:label="@string/app_name" android:theme="@style/AppTheme">
+        <activity android:exported="true" android:label="@string/app_name" android:name="com.afwsamples.testdpc.PolicyManagementActivity" android:windowSoftInputMode="adjustPan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.app.action.CHECK_POLICY_COMPLIANCE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity android:label="@string/setup_app_name" android:name="com.afwsamples.testdpc.SetupManagementActivity" android:taskAffinity="" android:theme="@style/SudThemeGlifV3.Light"/>
+        <activity-alias android:exported="true" android:name="com.afwsamples.testdpc.SetupManagementLaunchActivity" android:targetActivity="com.afwsamples.testdpc.SetupManagementActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+                <category android:name="android.intent.category.INFO"/>
+            </intent-filter>
+        </activity-alias>
+        <activity android:exported="false" android:label="@string/app_name" android:name="com.afwsamples.testdpc.AddAccountActivity" android:theme="@style/SudThemeGlifV3.Light"/>
+        <activity android:exported="true" android:label="@string/app_name" android:name="com.afwsamples.testdpc.FinalizeActivity" android:permission="android.permission.BIND_DEVICE_ADMIN" android:theme="@style/SudThemeGlifV3.Light">
+            <intent-filter>
+                <action android:name="android.app.action.ADMIN_POLICY_COMPLIANCE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity android:exported="false" android:label="@string/app_name" android:name="com.afwsamples.testdpc.cosu.EnableCosuActivity" android:theme="@style/SudThemeGlifV3.Light"/>
+        <activity android:enabled="false" android:exported="true" android:label="@string/kiosk_mode" android:launchMode="singleInstance" android:name="com.afwsamples.testdpc.policy.locktask.KioskModeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.HOME"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity android:exported="true" android:name="com.afwsamples.testdpc.provision.GetProvisioningModeActivity" android:permission="android.permission.BIND_DEVICE_ADMIN" android:theme="@style/DpcLoginTheme">
+            <intent-filter>
+                <action android:name="android.app.action.GET_PROVISIONING_MODE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity android:exported="true" android:name="com.afwsamples.testdpc.provision.ProvisioningSuccessActivity" android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.app.action.PROVISIONING_SUCCESSFUL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+        <activity android:exported="true" android:label="@string/work_policy_info_name" android:launchMode="singleTask" android:name="com.afwsamples.testdpc.WorkPolicyInfoActivity">
+            <intent-filter>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <action android:name="android.settings.SHOW_WORK_POLICY_INFO"/>
+            </intent-filter>
+        </activity>
+        <receiver android:description="@string/app_name" android:exported="true" android:label="@string/app_name" android:name="com.afwsamples.testdpc.DeviceAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin_receiver"/>
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
+                <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.app.action.PROFILE_OWNER_CHANGED"/>
+                <action android:name="android.app.action.DEVICE_OWNER_CHANGED"/>
+            </intent-filter>
+        </receiver>
+        <receiver android:exported="true" android:name="com.afwsamples.testdpc.DelegatedAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <intent-filter>
+                <action android:name="android.app.action.CHOOSE_PRIVATE_KEY_ALIAS"/>
+                <action android:name="android.app.action.NETWORK_LOGS_AVAILABLE"/>
+                <action android:name="android.app.action.SECURITY_LOGS_AVAILABLE"/>
+            </intent-filter>
+        </receiver>
+        <receiver android:exported="true" android:name="com.afwsamples.testdpc.BootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+        <receiver android:directBootAware="true" android:enabled="@bool/is_o_or_later" android:exported="true" android:name="com.afwsamples.testdpc.policy.resetpassword.ResetPasswordService$LockedBootCompletedReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+        <service android:directBootAware="true" android:enabled="@bool/is_o_or_later" android:exported="false" android:name="com.afwsamples.testdpc.policy.resetpassword.ResetPasswordService"/>
+        <provider android:authorities="com.afwsamples.testdpc.fileprovider" android:exported="false" android:grantUriPermissions="true" android:name="androidx.core.content.FileProvider">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/filepaths"/>
+        </provider>
+        <provider android:authorities="com.afwsamples.testdpc.usericoncontentprovider" android:exported="true" android:grantUriPermissions="true" android:name="com.afwsamples.testdpc.UserIconContentProvider"/>
+        <service android:exported="false" android:name="com.afwsamples.testdpc.profilepolicy.apprestrictions.AppRestrictionsProxy">
+            <intent-filter>
+                <action android:name="com.android.vending.dpc.APPLICATION_RESTRICTIONS_PROXY"/>
+            </intent-filter>
+        </service>
+        <service android:exported="true" android:name="com.afwsamples.testdpc.comp.ProfileOwnerService" android:permission="android.permission.BIND_DEVICE_ADMIN"/>
+        <service android:exported="true" android:name="com.afwsamples.testdpc.comp.DeviceOwnerService" android:permission="android.permission.BIND_DEVICE_ADMIN"/>
+        <service android:enabled="@bool/is_o_or_later" android:exported="true" android:name="com.afwsamples.testdpc.DeviceAdminService" android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_SERVICE"/>
+            </intent-filter>
+        </service>
+        <service android:exported="false" android:name="com.afwsamples.testdpc.feedback.AppStatesService">
+            <intent-filter>
+                <action android:name="androidx.enterprise.feedback.action.APP_STATES"/>
+            </intent-filter>
+        </service>
+        <provider android:authorities="com.afwsamples.testdpc.lifecycle-process" android:exported="false" android:multiprocess="true" android:name="androidx.lifecycle.ProcessLifecycleOwnerInitializer"/>
+        <uses-library android:name="androidx.window.extensions" android:required="false"/>
+        <uses-library android:name="androidx.window.sidecar" android:required="false"/>
+        <service android:enabled="false" android:exported="false" android:name="com.google.android.build.data.PropertiesServiceHolder" android:process="">
+            <intent-filter>
+                <action android:name="com.google.android.build.data.Properties"/>
+            </intent-filter>
+            <meta-data android:name="com.google.android.build.data.properties" android:resource="@raw/build_data"/>
+        </service>
+    </application>
+</manifest>
