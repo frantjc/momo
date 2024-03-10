@@ -23,8 +23,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: build
-    container:
-      image: ghcr.io/frantjc/momo:${{ github.sha }}
+    container: ghcr.io/frantjc/momo:${{ github.sha }}
     services:
       postgres:
         image: postgres:alpine
@@ -32,7 +31,7 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_PASSWORD: postgres
-        options: |
+        options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -44,7 +43,7 @@ jobs:
         env:
           MOMO_DB_URL: postgres://postgres:postgres@postgres?sslmode=disable
           MOMO_VERBOSE: "1"
-        options: |
+        options: >-
           --health-cmd "ping localhost:8080"
           --health-interval 10s
           --health-timeout 5s
