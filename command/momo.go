@@ -77,7 +77,7 @@ func NewMomo() *cobra.Command {
 					log = momo.LoggerFrom(ctx)
 				)
 
-				log.Info("opening bucket")
+				log.Info("opening bucket " + bloburlstr)
 				bucket, err := blob.OpenBucket(ctx, bloburlstr)
 				if err != nil {
 					return err
@@ -90,7 +90,7 @@ func NewMomo() *cobra.Command {
 				}
 
 				if err = retry(func() error {
-					log.Info("opening postgres")
+					log.Info("opening postgres " + dburlstr)
 					db, err = postgres.Open(ctx, dburlstr)
 					return err
 				}, 9); err != nil {
@@ -98,19 +98,21 @@ func NewMomo() *cobra.Command {
 				}
 				defer db.Close()
 
-				log.Info("running migrations against postgres")
-				if err = momosql.Migrate(ctx, db); err != nil {
+				log.Info("running migrations against postgres " + dburlstr)
+				if err = retry(func() error {
+					return momosql.Migrate(ctx, db)
+				}, 9); err != nil {
 					return err
 				}
 
-				log.Info("opening topic")
+				log.Info("opening topic " + pubsuburlstr)
 				topic, err := pubsub.OpenTopic(ctx, pubsuburlstr)
 				if err != nil {
 					return err
 				}
 				defer topic.Shutdown(ctx)
 
-				log.Info("opening subscription")
+				log.Info("opening subscription " + pubsuburlstr)
 				subscription, err := pubsub.OpenSubscription(ctx, pubsuburlstr)
 				if err != nil {
 					return err
@@ -159,7 +161,7 @@ func NewMomo() *cobra.Command {
 				}()
 
 				go func() {
-					log.Info("receiving messages")
+					log.Info("receiving messages on " + pubsuburlstr)
 					errC <- momopubsub.Receive(ctx, bucket, db, subscription)
 				}()
 
