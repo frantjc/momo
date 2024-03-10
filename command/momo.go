@@ -59,7 +59,7 @@ func NewMomo() *cobra.Command {
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-				if verbose := os.Getenv("MOMO_VERBOSE"); verbose != "" && xslice.Some([]string{"1", "y", "yes", "true", "t"}, func (s string, _ int) bool {
+				if verbose := os.Getenv("MOMO_VERBOSE"); verbose != "" && xslice.Some([]string{"1", "y", "yes", "true", "t"}, func(s string, _ int) bool {
 					return strings.EqualFold(s, verbose)
 				}) {
 					verbosity = 2
@@ -177,14 +177,167 @@ func NewMomo() *cobra.Command {
 
 	cmd.SetVersionTemplate("{{ .Name }}{{ .Version }} " + runtime.Version() + "\n")
 	cmd.PersistentFlags().CountVarP(&verbosity, "verbose", "V", "verbosity for momo")
+	cmd.PersistentFlags().StringVar(&urlstr, "url", "", "base URL for momo")
+
+	cmd.AddCommand(newPing(), newGet(), newUpload(), newSrv())
+
+	return cmd
+}
+
+func newSrv() *cobra.Command {
+	var (
+		address      string
+		dburlstr     string
+		pubsuburlstr string
+		bloburlstr   string
+		cmd          = &cobra.Command{
+			Use:           "srv",
+			Version:       momo.SemVer(),
+			SilenceErrors: true,
+			SilenceUsage:  true,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				var (
+					ctx = cmd.Context()
+					log = momo.LoggerFrom(ctx)
+				)
+
+				log.Info("opening bucket " + bloburlstr)
+				bucket, err := blob.OpenBucket(ctx, bloburlstr)
+				if err != nil {
+					return err
+				}
+				defer bucket.Close()
+
+				var db *sql.DB
+				if dburlstr == "" {
+					dburlstr = os.Getenv("MOMO_DB_URL")
+				}
+
+				log.Info("opening postgres " + dburlstr)
+				if err = retry(func() error {
+					db, err = postgres.Open(ctx, dburlstr)
+					return err
+				}, 9); err != nil {
+					return err
+				}
+				defer db.Close()
+
+				log.Info("running migrations against postgres " + dburlstr)
+				if err = retry(func() error {
+					return momosql.Migrate(ctx, db)
+				}, 9); err != nil {
+					return err
+				}
+
+				log.Info("opening topic " + pubsuburlstr)
+				topic, err := pubsub.OpenTopic(ctx, pubsuburlstr)
+				if err != nil {
+					return err
+				}
+				defer topic.Shutdown(ctx)
+
+				log.Info("opening subscription " + pubsuburlstr)
+				subscription, err := pubsub.OpenSubscription(ctx, pubsuburlstr)
+				if err != nil {
+					return err
+				}
+				defer subscription.Shutdown(ctx)
+
+				var (
+					base = new(url.URL)
+				)
+				if urlstr := cmd.Flag("url").Value.String(); urlstr != "" {
+					if base, err = url.Parse(urlstr); err != nil {
+						return err
+					}
+				}
+
+				var (
+					srv = &http.Server{
+						ReadHeaderTimeout: time.Second * 5,
+						BaseContext: func(l net.Listener) context.Context {
+							return ctx
+						},
+						Handler: ingress.New(
+							ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								fmt.Fprint(w, "ok")
+							})),
+							ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								fmt.Fprint(w, "ok")
+							})),
+							ingress.PrefixPath("/", momohttp.NewHandler(bucket, db, topic, base)),
+						),
+					}
+					errC = make(chan error)
+				)
+				defer srv.Close()
+
+				lis, err := net.Listen("tcp", address)
+				if err != nil {
+					return err
+				}
+				defer lis.Close()
+
+				go func() {
+					log.Info("listening on " + address)
+					errC <- srv.Serve(lis)
+				}()
+
+				go func() {
+					log.Info("receiving messages on " + pubsuburlstr)
+					errC <- momopubsub.Receive(ctx, bucket, db, subscription)
+				}()
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case err := <-errC:
+					return err
+				}
+			},
+		}
+	)
 
 	cmd.Flags().StringVar(&address, "addr", ":8080", "listen address for momo")
-	cmd.PersistentFlags().StringVar(&urlstr, "url", "", "base URL for momo")
 	cmd.Flags().StringVar(&dburlstr, "db", "", "database URL for momo")
 	cmd.Flags().StringVar(&pubsuburlstr, "pubsub", "mem://", "pubsub URL for momo")
 	cmd.Flags().StringVar(&bloburlstr, "blob", "mem://", "blob URL for momo")
 
-	cmd.AddCommand(newGet(), newUpload())
+	return cmd
+}
+
+func newPing() *cobra.Command {
+	var (
+		cmd = &cobra.Command{
+			Use:           "ping",
+			Version:       momo.SemVer(),
+			SilenceErrors: true,
+			SilenceUsage:  true,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				var (
+					ctx = cmd.Context()
+					cli = new(momo.Client)
+				)
+
+				if urlstr := cmd.Flag("url").Value.String(); urlstr != "" {
+					var err error
+					if cli.Base, err = url.Parse(urlstr); err != nil {
+						return err
+					}
+				}
+
+				if err := cli.Readyz(ctx); err != nil {
+					return err
+				}
+
+				if err := cli.Healthz(ctx); err != nil {
+					return err
+				}
+
+				return nil
+			},
+		}
+	)
 
 	return cmd
 }
@@ -375,6 +528,8 @@ func newUploadApp() *cobra.Command {
 								if _, err = io.Copy(tw, f); err != nil {
 									return err
 								}
+							} else {
+								return fmt.Errorf("invalid app %s", arg)
 							}
 						}
 

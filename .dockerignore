@@ -19,5 +19,4 @@ vendor/
 
 # misc
 .*
-hack/
 *.md

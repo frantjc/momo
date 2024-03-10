@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Client struct {
@@ -116,6 +117,10 @@ func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType stri
 		return err
 	}
 
+	if !strings.EqualFold(contentType, "applicatoin/x-gzip") && !strings.EqualFold(contentType, "applicaiton/x-tar") {
+		return fmt.Errorf("invalid Content-Type %s", contentType)
+	}
+
 	if err := ValidateApp(app); err != nil {
 		return err
 	}
@@ -156,6 +161,52 @@ func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType stri
 
 	if err = json.NewDecoder(res.Body).Decode(app); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (c *Client) Readyz(ctx context.Context) error {
+	if err := c.init(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Base.JoinPath("/readyz").String(), nil)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("http status code %d", res.StatusCode)
+	}
+
+	return nil
+}
+
+func (c *Client) Healthz(ctx context.Context) error {
+	if err := c.init(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Base.JoinPath("/healthz").String(), nil)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("http status code %d", res.StatusCode)
 	}
 
 	return nil

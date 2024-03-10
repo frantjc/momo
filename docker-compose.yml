@@ -4,21 +4,17 @@ services:
   momo:
     image: ghcr.io/frantjc/momo
     build: .
-    volumes:
-      - ./hack:/tmp
     command:
       - -VV
-      - --db=postgres://momo:momo@postgres?sslmode=disable
+      - --db=postgres://postgres:postgres@postgres?sslmode=disable
       - --blob=file:///tmp
     ports:
       - 8080:8080
     depends_on:
       - postgres
   postgres:
-    image: postgres:${POSTGRES_TAG:-alpine}
+    image: postgres:alpine
     ports:
       - 5432:5432
     environment:
-      POSTGRES_DB: momo
-      POSTGRES_USER: momo
-      POSTGRES_PASSWORD: momo
+      POSTGRES_PASSWORD: postgres

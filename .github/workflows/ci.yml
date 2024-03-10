@@ -41,11 +41,11 @@ jobs:
           MOMO_DB_URL: postgres://postgres:postgres@postgres?sslmode=disable
           MOMO_VERBOSE: "1"
         options: >-
-          --health-cmd "wget http://localhost:8080/readyz"
+          --health-cmd momo_isready
     steps:
-      - uses: actions/checkout@v4
       - run: |
           momo --version
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/delete-ghcr-images
         with:
           token: ${{ secrets.PAT }}
@@ -55,9 +55,9 @@ jobs:
         run: |
           momo upload app --url http://momo:8080/ test testdata/test.apk testdata/ipa
           sleep 9
-      - name: Run momo get app
-        run: |
-          momo get app --url http://momo:8080/ test
       - name: Run momo get apps
         run: |
           momo get apps --url http://momo:8080/
+      - name: Run momo get app
+        run: |
+          momo get app --url http://momo:8080/ test
