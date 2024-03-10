@@ -38,6 +38,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.5 // indirect
 	github.com/aws/smithy-go v1.19.0 // indirect
 	github.com/frantjc/go-encoding-unixtable v0.0.0-20230705011141-4260edb5ba19
+	github.com/frantjc/go-ingress v0.1.1
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/wire v0.5.0 // indirect

@@ -12,14 +12,17 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	unixtable "github.com/frantjc/go-encoding-unixtable"
+	"github.com/frantjc/go-ingress"
 	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/internal/momohttp"
 	"github.com/frantjc/momo/internal/momopubsub"
 	"github.com/frantjc/momo/internal/momoregexp"
 	"github.com/frantjc/momo/internal/momosql"
+	"github.com/frantjc/x/slice"
 	"github.com/spf13/cobra"
 	"gocloud.dev/blob"
 	"gocloud.dev/postgres"
@@ -56,6 +59,12 @@ func NewMomo() *cobra.Command {
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+				if verbose := os.Getenv("MOMO_VERBOSE"); verbose != "" && xslice.Some([]string{"1", "y", "yes", "true", "t"}, func (s string, _ int) bool {
+					return strings.EqualFold(s, verbose)
+				}) {
+					verbosity = 2
+				}
+
 				cmd.SetContext(
 					momo.WithLogger(
 						cmd.Context(), momo.NewLogger().V(2-verbosity),
@@ -66,9 +75,9 @@ func NewMomo() *cobra.Command {
 				var (
 					ctx = cmd.Context()
 					log = momo.LoggerFrom(ctx)
-					_   = log
 				)
 
+				log.Info("opening bucket")
 				bucket, err := blob.OpenBucket(ctx, bloburlstr)
 				if err != nil {
 					return err
@@ -81,6 +90,7 @@ func NewMomo() *cobra.Command {
 				}
 
 				if err = retry(func() error {
+					log.Info("opening postgres")
 					db, err = postgres.Open(ctx, dburlstr)
 					return err
 				}, 5); err != nil {
@@ -88,16 +98,19 @@ func NewMomo() *cobra.Command {
 				}
 				defer db.Close()
 
+				log.Info("running migrations against postgres")
 				if err = momosql.Migrate(ctx, db); err != nil {
 					return err
 				}
 
+				log.Info("opening topic")
 				topic, err := pubsub.OpenTopic(ctx, pubsuburlstr)
 				if err != nil {
 					return err
 				}
 				defer topic.Shutdown(ctx)
 
+				log.Info("opening subscription")
 				subscription, err := pubsub.OpenSubscription(ctx, pubsuburlstr)
 				if err != nil {
 					return err
@@ -120,7 +133,15 @@ func NewMomo() *cobra.Command {
 						BaseContext: func(l net.Listener) context.Context {
 							return ctx
 						},
-						Handler: momohttp.NewHandler(bucket, db, topic, base),
+						Handler: ingress.New(
+							ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								fmt.Fprint(w, "ok")
+							})),
+							ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								fmt.Fprint(w, "ok")
+							})),
+							ingress.PrefixPath("/", momohttp.NewHandler(bucket, db, topic, base)),
+						),
 					}
 					errC = make(chan error)
 				)
@@ -133,10 +154,12 @@ func NewMomo() *cobra.Command {
 				defer lis.Close()
 
 				go func() {
+					log.Info("listening on " + address)
 					errC <- srv.Serve(lis)
 				}()
 
 				go func() {
+					log.Info("receiving messages")
 					errC <- momopubsub.Receive(ctx, bucket, db, subscription)
 				}()
 

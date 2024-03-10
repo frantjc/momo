@@ -67,6 +67,8 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/frantjc/go-encoding-unixtable v0.0.0-20230705011141-4260edb5ba19 h1:k7wIYPmPLShIRqgxXUMIfx+x2Xwm/bRPJXDlcRWD8Ks=
 github.com/frantjc/go-encoding-unixtable v0.0.0-20230705011141-4260edb5ba19/go.mod h1:HUUoLc0e0ZrspVYKTtl7QoQj5iKmGTNXoLlvDZy9yW0=
+github.com/frantjc/go-ingress v0.1.1 h1:qT1Wy03bMtEVuZomM2FJgK1TViHRxuEV/xsOGlzy/Sw=
+github.com/frantjc/go-ingress v0.1.1/go.mod h1:C/oNT54NfMlg+8M6O2M3OLhB7/HvLPDObkJerC8r+yA=
 github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f h1:H2WGDYffgZ+aC3KnWaZv94tc4ZdvNmjIhfMuJSBNweU=
 github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f/go.mod h1:jzQwn2fyR0LRUO37WetnmJkZWmVR2GjhCD1QuaAJSPo=
 github.com/go-chi/chi/v5 v5.0.12 h1:9euLV5sTrTNTRUU9POmDUvfxyj6LAABLUcEWO+JJb4s=

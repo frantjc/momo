@@ -40,6 +40,9 @@ jobs:
           - 8080:8080
         env:
           MOMO_DB_URL: postgres://momo:momo@postgres?sslmode=disable
+          MOMO_VERBOSE: "1"
+        option: |
+          --health-cmd "ping localhost:8080"
     steps:
       # TODO: Clean up image.
       - uses: actions/checkout@v4
