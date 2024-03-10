@@ -53,6 +53,8 @@ jobs:
       - run: |
           momo --version
       - uses: ./.github/actions/delete-ghcr-image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run momo upload app
         run: |
           momo upload app --url http://momo:8080/ test testdata/test.apk
