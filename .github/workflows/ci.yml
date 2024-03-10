@@ -35,7 +35,7 @@ jobs:
           POSTGRES_USER: momo
           POSTGRES_PASSWORD: momo
       momo:
-        image: ghcr.io/${{ github.owner }}/momo:${{ github.sha }}
+        image: ghcr.io/frantjc/momo:${{ github.sha }}
         ports:
           - 8080:8080
         env:
