@@ -41,12 +41,7 @@ jobs:
         env:
           MOMO_DB_URL: postgres://momo:momo@postgres?sslmode=disable
     steps:
-      - uses: bots-house/ghcr-delete-image-action@v1.1.0
-        with:
-          owner: ${{ github.repository_owner }}
-          name: momo
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.sha }}
+      # TODO: Clean up image.
       - uses: actions/checkout@v4
       - run: |
           momo --version
