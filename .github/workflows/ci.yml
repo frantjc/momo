@@ -44,7 +44,7 @@ jobs:
           MOMO_DB_URL: postgres://postgres:postgres@postgres?sslmode=disable
           MOMO_VERBOSE: "1"
         options: >-
-          --health-cmd "ping localhost:8080"
+          --health-cmd "wget http://localhost:8080/readyz"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
