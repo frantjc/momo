@@ -47,13 +47,9 @@ func retry(fn func() error, retries int) error {
 // momo which acts as its CLI entrypoint.
 func NewMomo() *cobra.Command {
 	var (
-		address      string
-		urlstr       string
-		dburlstr     string
-		pubsuburlstr string
-		bloburlstr   string
-		verbosity    int
-		cmd          = &cobra.Command{
+		urlstr    string
+		verbosity int
+		cmd       = &cobra.Command{
 			Use:           "momo",
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
@@ -70,107 +66,6 @@ func NewMomo() *cobra.Command {
 						cmd.Context(), momo.NewLogger().V(2-verbosity),
 					),
 				)
-			},
-			RunE: func(cmd *cobra.Command, args []string) error {
-				var (
-					ctx = cmd.Context()
-					log = momo.LoggerFrom(ctx)
-				)
-
-				log.Info("opening bucket " + bloburlstr)
-				bucket, err := blob.OpenBucket(ctx, bloburlstr)
-				if err != nil {
-					return err
-				}
-				defer bucket.Close()
-
-				var db *sql.DB
-				if dburlstr == "" {
-					dburlstr = os.Getenv("MOMO_DB_URL")
-				}
-
-				log.Info("opening postgres " + dburlstr)
-				if err = retry(func() error {
-					db, err = postgres.Open(ctx, dburlstr)
-					return err
-				}, 9); err != nil {
-					return err
-				}
-				defer db.Close()
-
-				log.Info("running migrations against postgres " + dburlstr)
-				if err = retry(func() error {
-					return momosql.Migrate(ctx, db)
-				}, 9); err != nil {
-					return err
-				}
-
-				log.Info("opening topic " + pubsuburlstr)
-				topic, err := pubsub.OpenTopic(ctx, pubsuburlstr)
-				if err != nil {
-					return err
-				}
-				defer topic.Shutdown(ctx)
-
-				log.Info("opening subscription " + pubsuburlstr)
-				subscription, err := pubsub.OpenSubscription(ctx, pubsuburlstr)
-				if err != nil {
-					return err
-				}
-				defer subscription.Shutdown(ctx)
-
-				var (
-					base = new(url.URL)
-				)
-				if urlstr != "" {
-					base, err = url.Parse(urlstr)
-					if err != nil {
-						return err
-					}
-				}
-
-				var (
-					srv = &http.Server{
-						ReadHeaderTimeout: time.Second * 5,
-						BaseContext: func(l net.Listener) context.Context {
-							return ctx
-						},
-						Handler: ingress.New(
-							ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								fmt.Fprint(w, "ok")
-							})),
-							ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								fmt.Fprint(w, "ok")
-							})),
-							ingress.PrefixPath("/", momohttp.NewHandler(bucket, db, topic, base)),
-						),
-					}
-					errC = make(chan error)
-				)
-				defer srv.Close()
-
-				lis, err := net.Listen("tcp", address)
-				if err != nil {
-					return err
-				}
-				defer lis.Close()
-
-				go func() {
-					log.Info("listening on " + address)
-					errC <- srv.Serve(lis)
-				}()
-
-				go func() {
-					log.Info("receiving messages on " + pubsuburlstr)
-					errC <- momopubsub.Receive(ctx, bucket, db, subscription)
-				}()
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case err := <-errC:
-					return err
-				}
 			},
 		}
 	)
@@ -191,18 +86,30 @@ func newSrv() *cobra.Command {
 		pubsuburlstr string
 		bloburlstr   string
 		cmd          = &cobra.Command{
-			Use:           "srv",
+			Use:           "srv [flags]",
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
+			Args:          cobra.MinimumNArgs(2),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				var (
 					ctx = cmd.Context()
 					log = momo.LoggerFrom(ctx)
 				)
 
-				log.Info("opening bucket " + bloburlstr)
-				bucket, err := blob.OpenBucket(ctx, bloburlstr)
+				bloburl, err := url.Parse(bloburlstr)
+				if err != nil {
+					return err
+				}
+
+				if bloburl.Scheme == "file" {
+					if err = os.MkdirAll(bloburl.Path, 0o644); err != nil {
+						return err
+					}
+				}
+
+				log.Info("opening bucket " + bloburl.String())
+				bucket, err := blob.OpenBucket(ctx, bloburl.String())
 				if err != nil {
 					return err
 				}
@@ -245,6 +152,7 @@ func newSrv() *cobra.Command {
 
 				var (
 					base = new(url.URL)
+					errC = make(chan error)
 				)
 				if urlstr := cmd.Flag("url").Value.String(); urlstr != "" {
 					if base, err = url.Parse(urlstr); err != nil {
@@ -252,7 +160,18 @@ func newSrv() *cobra.Command {
 					}
 				}
 
+				remix, exec, err := momohttp.NewNodeHandlerWithPortFromEnv(ctx, args[0], args[1], args[2:]...)
+				if err != nil {
+					return err
+				}
+
+				go func() {
+					log.Info("running remix")
+					errC <- exec.Run()
+				}()
+
 				var (
+					api = momohttp.NewHandler(bucket, db, topic, base)
 					srv = &http.Server{
 						ReadHeaderTimeout: time.Second * 5,
 						BaseContext: func(l net.Listener) context.Context {
@@ -265,10 +184,11 @@ func newSrv() *cobra.Command {
 							ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 								fmt.Fprint(w, "ok")
 							})),
-							ingress.PrefixPath("/", momohttp.NewHandler(bucket, db, topic, base)),
+							ingress.PrefixPath("/api", api),
+							ingress.PrefixPath("/apps", api),
+							ingress.PrefixPath("/", remix),
 						),
 					}
-					errC = make(chan error)
 				)
 				defer srv.Close()
 
@@ -309,7 +229,7 @@ func newSrv() *cobra.Command {
 func newPing() *cobra.Command {
 	var (
 		cmd = &cobra.Command{
-			Use:           "ping",
+			Use:           "ping [flags]",
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
@@ -361,7 +281,7 @@ func newGet() *cobra.Command {
 func newGetApps() *cobra.Command {
 	var (
 		cmd = &cobra.Command{
-			Use:           "apps",
+			Use:           "apps [flags]",
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
@@ -394,7 +314,7 @@ func newGetApps() *cobra.Command {
 func newGetApp() *cobra.Command {
 	var (
 		cmd = &cobra.Command{
-			Use:           "app",
+			Use:           "app [flags] (name [version] | ID)",
 			Version:       momo.SemVer(),
 			Args:          cobra.RangeArgs(1, 2),
 			SilenceErrors: true,
@@ -461,7 +381,7 @@ func newUpload() *cobra.Command {
 func newUploadApp() *cobra.Command {
 	var (
 		cmd = &cobra.Command{
-			Use:           "app",
+			Use:           "app [flags] (name) [version] (.ipa|.apk ...)",
 			Version:       momo.SemVer(),
 			Args:          cobra.RangeArgs(2, 4),
 			SilenceErrors: true,

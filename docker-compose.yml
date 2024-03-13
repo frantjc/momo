@@ -4,12 +4,12 @@ services:
   momo:
     image: ghcr.io/frantjc/momo
     build: .
+    ports:
+      - 8080:8080
     command:
       - -VV
       - --db=postgres://postgres:postgres@postgres?sslmode=disable
-      - --blob=file:///tmp
-    ports:
-      - 8080:8080
+      - --blob=file:///var/lib/momo
     depends_on:
       - postgres
   postgres:

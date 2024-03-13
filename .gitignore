@@ -12,3 +12,10 @@ dist/
 
 # go
 vendor/
+
+# node
+node_modules/
+
+# remix
+.cache/
+build/

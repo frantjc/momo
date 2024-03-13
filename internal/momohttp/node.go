@@ -9,12 +9,24 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
-func NewNodeHandlerWithPortFromEnv(ctx context.Context, node string, arg ...string) (http.Handler, *exec.Cmd, error) {
-	cmd := exec.CommandContext(ctx, node, arg...)
+func NewNodeHandlerWithPortFromEnv(ctx context.Context, node, entrypoint string, args ...string) (http.Handler, *exec.Cmd, error) {
+	var (
+		_args = append([]string{entrypoint}, args...)
+		cmd   = exec.CommandContext(ctx, node, _args...)
+	)
 
-	lis, err := net.Listen("tcp", "0")
+	if fi, err := os.Stat(entrypoint); err != nil {
+		return nil, nil, err
+	} else if fi.IsDir() {
+		cmd.Dir = filepath.Clean(entrypoint)
+	} else {
+		cmd.Dir = filepath.Dir(entrypoint)
+	}
+
+	lis, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -24,7 +36,7 @@ func NewNodeHandlerWithPortFromEnv(ctx context.Context, node string, arg ...stri
 		return nil, nil, err
 	}
 
-	u, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%s", port))
+	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%s", port))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -35,5 +47,5 @@ func NewNodeHandlerWithPortFromEnv(ctx context.Context, node string, arg ...stri
 		return nil, nil, err
 	}
 
-	return httputil.NewSingleHostReverseProxy(u), cmd, nil
+	return httputil.NewSingleHostReverseProxy(target), cmd, nil
 }
