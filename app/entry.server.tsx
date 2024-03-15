@@ -13,7 +13,7 @@ import { RemixServer } from "@remix-run/react";
 import { isbot } from "isbot";
 import { renderToString, renderToPipeableStream } from "react-dom/server";
 
-import createEmotionCache from "~/create-emotion-cache";
+import createEmotionCache from "~/create_emotion_cache";
 import { ServerStyleContext } from "./context";
 import { CacheProvider } from "@emotion/react";
 

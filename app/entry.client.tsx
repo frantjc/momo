@@ -4,7 +4,7 @@ import React from "react";
 import { hydrateRoot } from "react-dom/client";
 
 import { ClientStyleContext } from '~/context'
-import createEmotionCache, { defaultCache } from '~/create-emotion-cache'
+import createEmotionCache, { defaultCache } from '~/create_emotion_cache'
 
 interface ClientCacheProviderProps {
   children: React.ReactNode;

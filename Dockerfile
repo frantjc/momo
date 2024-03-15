@@ -12,15 +12,6 @@ COPY ios/ ios/
 ENV CGO_ENABLED 0
 RUN go build -o /momo ./cmd/momo
 
-FROM node:20.11.1-alpine3.19 as remix
-WORKDIR /src/github.com/frantjc/momo
-COPY package.json yarn.lock ./
-RUN yarn
-COPY app/ app/
-COPY public/ public/
-COPY *.js *.ts tsconfig.json ./
-RUN yarn build
-
 FROM amazoncorretto:21-alpine3.19 AS base
 ENV NODE_VERSION 20.11.1
 RUN apk add --no-cache \
@@ -35,15 +26,33 @@ RUN apk add --no-cache \
         && find /usr/local/include/node/openssl/archs -mindepth 1 -maxdepth 1 ! -name "linux-x86_64" -exec rm -rf {} \; \
         && apk del .build-deps
 
+ENV YARN_VERSION 1.22.19
+
+RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg tar \
+  && export GNUPGHOME="$(mktemp -d)" \
+  && for key in \
+    6A010C5166006599AA17F08146C2130DFD2497F5 \
+  ; do \
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" || \
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \
+  done \
+  && curl -fsSLO --compressed "https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz" \
+  && curl -fsSLO --compressed "https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz.asc" \
+  && gpg --batch --verify yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz \
+  && gpgconf --kill all \
+  && rm -rf "$GNUPGHOME" \
+  && mkdir -p /opt \
+  && tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/ \
+  && ln -s /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn \
+  && ln -s /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg \
+  && rm yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz \
+  && apk del .build-deps-yarn
+
 FROM base
 ADD https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar /usr/local/bin/apktool.jar
 ADD https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool /usr/local/bin/
 RUN sed -i 's|#!/bin/bash|#!/bin/sh|g' /usr/local/bin/apktool
 COPY assets/ /usr/local/bin
 RUN chmod +x /usr/local/bin/*
-ENTRYPOINT ["/usr/local/bin/momo", "srv", "/usr/local/bin/node", "/app/server.js"]
-COPY server.js package.json /app/
-COPY --from=remix /src/github.com/frantjc/momo/build /app/build/
-COPY --from=remix /src/github.com/frantjc/momo/node_modules /app/node_modules/
-COPY --from=remix /src/github.com/frantjc/momo/public /app/public/
+ENTRYPOINT ["/usr/local/bin/momo", "srv"]
 COPY --from=go momo /usr/local/bin

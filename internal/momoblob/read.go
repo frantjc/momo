@@ -19,26 +19,31 @@ import (
 	"howett.net/plist"
 )
 
-func NewAppFileReader(ctx context.Context, bucket *blob.Bucket, base *url.URL, app *momo.App, file string, pretty bool) (io.ReadCloser, error) {
+func NewAppFileReader(ctx context.Context, bucket *blob.Bucket, base *url.URL, app *momo.App, file string, pretty bool) (io.ReadCloser, string, error) {
 	var (
-		ext = filepath.Ext(file)
-		rc  io.ReadCloser
-		err error
+		ext         = filepath.Ext(file)
+		rc          io.ReadCloser
+		contentType string
+		err         error
 	)
 	switch {
 	case strings.EqualFold(ext, ".apk"):
+		contentType = "application/vnd.android.package-archive"
 		rc, err = bucket.NewReader(ctx, APKKey(app.ID), nil)
 	case strings.EqualFold(ext, ".ipa"):
+		contentType = "application/octet-stream"
 		rc, err = bucket.NewReader(ctx, IPAKey(app.ID), nil)
 	case strings.EqualFold(file, "full-size.png"), strings.EqualFold(file, "full-size-image.png"), strings.EqualFold(file, "icon512.png"):
+		contentType = "image/png"
 		rc, err = bucket.NewReader(ctx, FullSizeImageKey(app.ID), nil)
 	case strings.EqualFold(file, "display.png"), strings.EqualFold(file, "display-image.png"), strings.EqualFold(file, "icon57.png"):
+		contentType = "image/png"
 		rc, err = bucket.NewReader(ctx, DisplayImageKey(app.ID), nil)
 	case strings.EqualFold(file, "manifest.plist"):
 		if app.BundleIdentifier == "" || app.BundleName == "" || app.Version == "" {
-			return nil, momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
+			return nil, "", momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
 		} else if exists, _ := bucket.Exists(ctx, IPAKey(app.ID)); !exists {
-			return nil, momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
+			return nil, "", momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
 		}
 
 		var (
@@ -76,21 +81,21 @@ func NewAppFileReader(ctx context.Context, bucket *blob.Bucket, base *url.URL, a
 				},
 			},
 		}); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
-		return io.NopCloser(buf), nil
+		return io.NopCloser(buf), "application/xml", nil
 	}
 	if gcerrors.Code(err) == gcerrors.NotFound || rc == nil {
 		switch {
 		case strings.EqualFold(ext, ".png"):
-			return io.NopCloser(bytes.NewReader(momoimg.QuestionMark)), nil
+			return io.NopCloser(bytes.NewReader(momoimg.QuestionMark)), "image/png", nil
 		}
 
-		return nil, momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
+		return nil, "", momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
 	} else if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return rc, nil
+	return rc, contentType, nil
 }

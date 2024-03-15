@@ -1,3 +1,5 @@
+import path from "path";
+
 export type App = {
     id: string
     name: string;
@@ -16,7 +18,31 @@ export function getApps() {
         .then((res) => {
           return res.json() as Promise<Array<App>>;
         })
-        .then(apps => apps.map(app => ({ ...app, updated: new Date(app.updated), created: new Date(app.created)})))
+        .then(apps => apps.map(typeApp))
+}
+
+export function getApp(app: Pick<App, "id"> | Pick<App, "name" | "version">) {
+  if ("id" in app && app.id) {
+    return fetch(getUrl(path.join("/api/v1/apps", app.id)))
+        .then(handleError)
+        .then((res) => {
+          return res.json() as Promise<App>;
+        })
+        .then(typeApp);
+  } else if ("name" in app) {
+    return fetch(getUrl(path.join("/api/v1/apps", app.name, app.version || "")))
+        .then(handleError)
+        .then((res) => {
+          return res.json() as Promise<App>;
+        })
+        .then(typeApp);
+  }
+
+  throw new Error("unable to uniquely identify app");
+}
+
+function typeApp(app: App) {
+  return { ...app, updated: new Date(app.updated), created: new Date(app.created) };
 }
 
 // getUrl takes a path and returns the full URL

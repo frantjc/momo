@@ -6,10 +6,16 @@ services:
     build: .
     ports:
       - 8080:8080
+    working_dir: /src
+    volumes:
+      - ./:/src
     command:
       - -VV
       - --db=postgres://postgres:postgres@postgres?sslmode=disable
       - --blob=file:///var/lib/momo
+      - --
+      - yarn
+      - compose
     depends_on:
       - postgres
   postgres:

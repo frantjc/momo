@@ -84,13 +84,14 @@ func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.
 			return
 		}
 
-		rc, err := momoblob.NewAppFileReader(ctx, bucket, base, app, name, pretty)
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, name, pretty)
 		if err != nil {
 			_ = respondErrorJSON(w, err, pretty)
 			return
 		}
 		defer rc.Close()
 
+		w.Header().Set("Content-Type", contentType)
 		_, _ = io.Copy(w, rc)
 	})
 
@@ -114,13 +115,14 @@ func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.
 			return
 		}
 
-		rc, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
 		if err != nil {
 			_ = respondErrorJSON(w, err, pretty)
 			return
 		}
 		defer rc.Close()
 
+		w.Header().Set("Content-Type", contentType)
 		_, _ = io.Copy(w, rc)
 	})
 
@@ -145,43 +147,43 @@ func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.
 			return
 		}
 
-		rc, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
 		if err != nil {
 			_ = respondErrorJSON(w, err, pretty)
 			return
 		}
 		defer rc.Close()
 
+		w.Header().Set("Content-Type", contentType)
 		_, _ = io.Copy(w, rc)
 	})
 
-	r.Get(fmt.Sprintf("/apps/%s/itms-services", appParam), func(w http.ResponseWriter, r *http.Request) {
-		var (
-			ctx = r.Context()
-			app = &momo.App{
-				Name: getApp(r),
-			}
-			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
+	r.Get(fmt.Sprintf("/apps/%s/download-manifest", idParam), func(w http.ResponseWriter, r *http.Request) {
+		downloadManifest(
+			&momo.App{
+				ID: getID(r),
+			},
+			db, base, w, r,
 		)
+	})
 
-		if err := momo.ValidateApp(app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
+	r.Get(fmt.Sprintf("/apps/%s/download-manifest", appParam), func(w http.ResponseWriter, r *http.Request) {
+		downloadManifest(
+			&momo.App{
+				Name: getApp(r),
+			},
+			db, base, w, r,
+		)
+	})
 
-		if err := momosql.SelectApp(ctx, db, app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		values := url.Values{}
-		values.Add("action", "download-manifest")
-		values.Add("url", base.JoinPath("/apps", app.Name, "manifest.plist").String())
-
-		http.Redirect(w, r, (&url.URL{
-			Scheme:   "itms-services",
-			RawQuery: values.Encode(),
-		}).String(), http.StatusMovedPermanently)
+	r.Get(fmt.Sprintf("/apps/%s/%s/download-manifest", appParam, versionParam), func(w http.ResponseWriter, r *http.Request) {
+		downloadManifest(
+			&momo.App{
+				Name:    getApp(r),
+				Version: getVersion(r),
+			},
+			db, base, w, r,
+		)
 	})
 
 	r.Get(fmt.Sprintf("/api/v1/apps/%s", appParam), func(w http.ResponseWriter, r *http.Request) {

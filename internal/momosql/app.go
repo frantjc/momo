@@ -68,14 +68,21 @@ func SelectApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 }
 
 func SelectApps(ctx context.Context, db *sql.DB, limit, offset int) ([]momo.App, error) {
-	_limit := "ALL"
+	var (
+		_limit  = "ALL"
+		_offset = 0
+	)
 	if limit > 0 {
 		_limit = fmt.Sprint(limit)
 	}
 
+	if offset > 0 {
+		_offset = offset
+	}
+
 	rows, err := db.QueryContext(ctx,
 		"SELECT id, name, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app ORDER BY created LIMIT $1 OFFSET $2",
-		_limit, offset,
+		_limit, _offset,
 	)
 	if err != nil {
 		return nil, err
