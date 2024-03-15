@@ -69,11 +69,11 @@ func SelectApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 
 func SelectApps(ctx context.Context, db *sql.DB, limit, offset int) ([]momo.App, error) {
 	var (
-		_limit  = "ALL"
+		_limit  = 0
 		_offset = 0
 	)
 	if limit > 0 {
-		_limit = fmt.Sprint(limit)
+		_limit = limit
 	}
 
 	if offset > 0 {
