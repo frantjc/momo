@@ -3,7 +3,9 @@ version: "3.4"
 services:
   momo:
     image: ghcr.io/frantjc/momo
-    build: .
+    build:
+      dockerfile: dev.Dockerfile
+      context: .
     ports:
       - 8080:8080
     working_dir: /src
