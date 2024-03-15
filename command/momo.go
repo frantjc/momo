@@ -235,7 +235,6 @@ func newSrv() *cobra.Command {
 
 	cmd.Flags().StringVar(&address, "addr", ":8080", "listen address for momo")
 	cmd.Flags().StringVar(&dburlstr, "db", "", "database URL for momo")
-	_ = cmd.MarkFlagRequired("db")
 	cmd.Flags().StringVar(&pubsuburlstr, "pubsub", "mem://", "pubsub URL for momo")
 	cmd.Flags().StringVar(&bloburlstr, "blob", "mem://", "blob URL for momo")
 

@@ -17,6 +17,13 @@ vendor/
 *Dockerfile
 *compose.*
 
+# node
+node_modules/
+
+# remix
+.cache/
+build/
+
 # misc
 .*
 *.md
