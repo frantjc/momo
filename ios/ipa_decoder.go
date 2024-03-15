@@ -102,9 +102,9 @@ func (i *IPADecoder) Icons(ctx context.Context) (io.Reader, error) {
 	)
 
 	go func() {
-		for _, bif := range i.info.CFBundleIconFiles {
-			if xslice.Includes([]string{".png", ".jpg", ".jpeg"}, filepath.Ext(bif)) {
-				if err := func() error {
+		if err := func() error {
+			for _, bif := range i.info.CFBundleIconFiles {
+				if xslice.Includes([]string{".png", ".jpg", ".jpeg"}, filepath.Ext(bif)) {
 					fsf, err := zr.Open(filepath.Join(i.infoDir, bif))
 					if err != nil {
 						return err
@@ -127,14 +127,14 @@ func (i *IPADecoder) Icons(ctx context.Context) (io.Reader, error) {
 					if _, err = io.Copy(tw, fsf); err != nil {
 						return err
 					}
-
-					return nil
-				}(); err != nil {
-					_ = tw.Close()
-					_ = pw.CloseWithError(err)
-					return
 				}
 			}
+
+			return nil
+		}(); err != nil {
+			_ = tw.Close()
+			_ = pw.CloseWithError(err)
+			return
 		}
 
 		_ = tw.Close()

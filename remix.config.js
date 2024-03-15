@@ -2,4 +2,5 @@
 export default {
   ignoredRouteFiles: ["**/*.css"],
   serverModuleFormat: "esm",
+  browserNodeBuiltinsPolyfill: { modules: { path: true } },
 };

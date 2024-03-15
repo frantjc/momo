@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -160,9 +161,21 @@ func newSrv() *cobra.Command {
 					}
 				}
 
-				remix, exec, err := momohttp.NewNodeHandlerWithPortFromEnv(ctx, args[0], args[1], args[2:]...)
+				remix, exec, err := momohttp.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
 				if err != nil {
 					return err
+				}
+
+				if len(args) > 1 {
+					entrypoint := args[1]
+
+					if fi, err := os.Stat(entrypoint); err == nil {
+						if fi.IsDir() {
+							exec.Dir = filepath.Clean(entrypoint)
+						} else {
+							exec.Dir = filepath.Dir(entrypoint)
+						}
+					}
 				}
 
 				go func() {

@@ -9,22 +9,12 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 )
 
-func NewNodeHandlerWithPortFromEnv(ctx context.Context, node, entrypoint string, args ...string) (http.Handler, *exec.Cmd, error) {
+func NewExecHandlerWithPortFromEnv(ctx context.Context, name string, args ...string) (http.Handler, *exec.Cmd, error) {
 	var (
-		_args = append([]string{entrypoint}, args...)
-		cmd   = exec.CommandContext(ctx, node, _args...)
+		cmd = exec.CommandContext(ctx, name, args...)
 	)
-
-	if fi, err := os.Stat(entrypoint); err != nil {
-		return nil, nil, err
-	} else if fi.IsDir() {
-		cmd.Dir = filepath.Clean(entrypoint)
-	} else {
-		cmd.Dir = filepath.Dir(entrypoint)
-	}
 
 	lis, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {

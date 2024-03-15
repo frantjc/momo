@@ -29,9 +29,11 @@ func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.
 		var (
 			ctx       = r.Context()
 			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
+			limit, _  = strconv.Atoi(r.URL.Query().Get("limit"))
+			offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
 		)
 
-		apps, err := momosql.SelectApps(ctx, db)
+		apps, err := momosql.SelectApps(ctx, db, limit, offset)
 		if err != nil {
 			_ = respondErrorJSON(w, err, pretty)
 			return

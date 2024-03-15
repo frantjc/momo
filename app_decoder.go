@@ -70,6 +70,10 @@ func BestFitIcon(ctx context.Context, dimensions int, extension string, appDecod
 				img, err = jpeg.Decode(bytes.NewReader(b))
 			}
 			if err != nil {
+				if len(bestFitBytes) == 0 {
+					bestFitBytes = b
+				}
+
 				continue
 			}
 
@@ -85,7 +89,7 @@ func BestFitIcon(ctx context.Context, dimensions int, extension string, appDecod
 		}
 	}
 
-	if bestFitDimensions == 0 || len(bestFitBytes) == 0 {
+	if len(bestFitBytes) == 0 {
 		return nil, ErrIconNotFound
 	}
 
