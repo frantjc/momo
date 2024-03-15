@@ -15,7 +15,8 @@ services:
       - --blob=file:///var/lib/momo
       - --
       - yarn
-      - compose
+      - node
+      - scripts/compose.js
     depends_on:
       - postgres
   postgres:

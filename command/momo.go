@@ -166,15 +166,17 @@ func newSrv() *cobra.Command {
 					return err
 				}
 
-				if len(args) > 1 {
-					entrypoint := args[1]
-
+				// A rough algorithm for making the working directory of
+				// the exec the directory of the entrypoint in the case
+				// of the args being something like `node /app/server.js`.
+				for _, entrypoint := range args[1:] {
 					if fi, err := os.Stat(entrypoint); err == nil {
 						if fi.IsDir() {
 							exec.Dir = filepath.Clean(entrypoint)
 						} else {
 							exec.Dir = filepath.Dir(entrypoint)
 						}
+						break
 					}
 				}
 
@@ -233,6 +235,7 @@ func newSrv() *cobra.Command {
 
 	cmd.Flags().StringVar(&address, "addr", ":8080", "listen address for momo")
 	cmd.Flags().StringVar(&dburlstr, "db", "", "database URL for momo")
+	_ = cmd.MarkFlagRequired("db")
 	cmd.Flags().StringVar(&pubsuburlstr, "pubsub", "mem://", "pubsub URL for momo")
 	cmd.Flags().StringVar(&bloburlstr, "blob", "mem://", "blob URL for momo")
 

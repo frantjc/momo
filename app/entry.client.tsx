@@ -1,10 +1,10 @@
-import { CacheProvider } from '@emotion/react'
+import { CacheProvider } from "@emotion/react"
 import { RemixBrowser } from "@remix-run/react";
 import React from "react";
 import { hydrateRoot } from "react-dom/client";
 
-import { ClientStyleContext } from '~/context'
-import createEmotionCache, { defaultCache } from '~/create_emotion_cache'
+import { ClientStyleContext } from "~/context";
+import createEmotionCache, { defaultCache } from "~/create_emotion_cache";
 
 interface ClientCacheProviderProps {
   children: React.ReactNode;

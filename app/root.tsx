@@ -9,7 +9,7 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 import React from "react";
-import { ServerStyleContext, ClientStyleContext } from '~/context'
+import { ServerStyleContext, ClientStyleContext } from "~/context";
 
 const Document = withEmotionCache(
   ({ children }: React.PropsWithChildren, emotionCache) => {

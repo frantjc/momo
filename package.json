@@ -7,8 +7,7 @@
   "scripts": {
     "build": "remix build",
     "dev": "remix dev --manual -c \"node --watch-path server.js --watch server.js\"",
-    "fmt": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
-    "compose": "node scripts/compose.js"
+    "fmt": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint ."
   },
   "dependencies": {
     "@chakra-ui/react": "^2.8.2",
