@@ -88,7 +88,7 @@ func newSrv() *cobra.Command {
 		pubsuburlstr string
 		bloburlstr   string
 		cmd          = &cobra.Command{
-			Use:           "srv [flags]",
+			Use:           "srv [flags] [subcommand]",
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
@@ -152,9 +152,9 @@ func newSrv() *cobra.Command {
 				defer subscription.Shutdown(ctx)
 
 				var (
-					base    = new(url.URL)
-					errC    = make(chan error)
-					handler http.Handler
+					base = new(url.URL)
+					errC = make(chan error)
+					ing  = &ingress.Ingress{}
 				)
 				if urlstr := cmd.Flag("url").Value.String(); urlstr != "" {
 					if base, err = url.Parse(urlstr); err != nil {
@@ -164,7 +164,7 @@ func newSrv() *cobra.Command {
 
 				if len(args) > 0 {
 					var exec *exec.Cmd
-					handler, exec, err = momohttp.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
+					ing.DefaultBackend, exec, err = momohttp.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
 					if err != nil {
 						return err
 					}
@@ -184,29 +184,29 @@ func newSrv() *cobra.Command {
 					}
 
 					go func() {
-						log.Info("running remix")
+						log.Info("running exec fallback handler")
 						errC <- exec.Run()
 					}()
 				}
 
+				ing.Paths = []ingress.Path{
+					ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						fmt.Fprint(w, "ok")
+					})),
+					ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						fmt.Fprint(w, "ok")
+					})),
+					ingress.PrefixPath("/api", momohttp.NewAPIHandler(bucket, db, topic, ing.DefaultBackend)),
+					ingress.PrefixPath("/apps", momohttp.NewAppsHandler(bucket, db, base, ing.DefaultBackend)),
+				}
+
 				var (
-					api = momohttp.NewHandler(bucket, db, topic, base)
 					srv = &http.Server{
 						ReadHeaderTimeout: time.Second * 5,
 						BaseContext: func(l net.Listener) context.Context {
 							return ctx
 						},
-						Handler: ingress.New(
-							ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								fmt.Fprint(w, "ok")
-							})),
-							ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								fmt.Fprint(w, "ok")
-							})),
-							ingress.PrefixPath("/api", api),
-							ingress.PrefixPath("/apps", api),
-							ingress.PrefixPath("/", handler),
-						),
+						Handler: ing,
 					}
 				)
 				defer srv.Close()
@@ -320,6 +320,10 @@ func newGetApps() *cobra.Command {
 				apps, err := cli.GetApps(ctx)
 				if err != nil {
 					return err
+				}
+
+				if len(apps) == 0 {
+					return fmt.Errorf("no apps found")
 				}
 
 				return unixtable.NewEncoder(cmd.OutOrStdout()).Encode(apps)

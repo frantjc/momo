@@ -20,7 +20,7 @@ import (
 	"gocloud.dev/pubsub"
 )
 
-func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.URL) http.Handler {
+func NewAPIHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, notFound http.Handler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RealIP)
@@ -62,128 +62,6 @@ func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.
 		}
 
 		_ = respondJSON(w, app, pretty)
-	})
-
-	r.Get(fmt.Sprintf("/apps/%s/%s", idParam, fileParam), func(w http.ResponseWriter, r *http.Request) {
-		var (
-			ctx = r.Context()
-			app = &momo.App{
-				ID: getID(r),
-			}
-			name      = chi.URLParam(r, "name")
-			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
-		)
-
-		if err := momo.ValidateApp(app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		if err := momosql.SelectApp(ctx, db, app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, name, pretty)
-		if err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-		defer rc.Close()
-
-		w.Header().Set("Content-Type", contentType)
-		_, _ = io.Copy(w, rc)
-	})
-
-	r.Get(fmt.Sprintf("/apps/%s/%s", appParam, fileParam), func(w http.ResponseWriter, r *http.Request) {
-		var (
-			ctx = r.Context()
-			app = &momo.App{
-				Name: getApp(r),
-			}
-			file      = getFile(r)
-			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
-		)
-
-		if err := momo.ValidateApp(app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		if err := momosql.SelectApp(ctx, db, app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
-		if err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-		defer rc.Close()
-
-		w.Header().Set("Content-Type", contentType)
-		_, _ = io.Copy(w, rc)
-	})
-
-	r.Get(fmt.Sprintf("/apps/%s/%s/%s", appParam, versionParam, fileParam), func(w http.ResponseWriter, r *http.Request) {
-		var (
-			ctx = r.Context()
-			app = &momo.App{
-				Name:    getApp(r),
-				Version: getVersion(r),
-			}
-			file      = getFile(r)
-			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
-		)
-
-		if err := momo.ValidateApp(app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		if err := momosql.SelectApp(ctx, db, app); err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-
-		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
-		if err != nil {
-			_ = respondErrorJSON(w, err, pretty)
-			return
-		}
-		defer rc.Close()
-
-		w.Header().Set("Content-Type", contentType)
-		_, _ = io.Copy(w, rc)
-	})
-
-	r.Get(fmt.Sprintf("/apps/%s/download-manifest", idParam), func(w http.ResponseWriter, r *http.Request) {
-		downloadManifest(
-			&momo.App{
-				ID: getID(r),
-			},
-			db, base, w, r,
-		)
-	})
-
-	r.Get(fmt.Sprintf("/apps/%s/download-manifest", appParam), func(w http.ResponseWriter, r *http.Request) {
-		downloadManifest(
-			&momo.App{
-				Name: getApp(r),
-			},
-			db, base, w, r,
-		)
-	})
-
-	r.Get(fmt.Sprintf("/apps/%s/%s/download-manifest", appParam, versionParam), func(w http.ResponseWriter, r *http.Request) {
-		downloadManifest(
-			&momo.App{
-				Name:    getApp(r),
-				Version: getVersion(r),
-			},
-			db, base, w, r,
-		)
 	})
 
 	r.Get(fmt.Sprintf("/api/v1/apps/%s", appParam), func(w http.ResponseWriter, r *http.Request) {
@@ -326,6 +204,140 @@ func NewHandler(bucket *blob.Bucket, db *sql.DB, topic *pubsub.Topic, base *url.
 		w.WriteHeader(http.StatusCreated)
 		_ = respondJSON(w, app, pretty)
 	})
+
+	r.NotFound(http.NotFound)
+
+	return r
+}
+
+func NewAppsHandler(bucket *blob.Bucket, db *sql.DB, base *url.URL, notFound http.Handler) http.Handler {
+	r := chi.NewRouter()
+
+	r.Use(middleware.RealIP)
+
+	r.Get(fmt.Sprintf("/apps/%s/%s", idParam, fileParam), func(w http.ResponseWriter, r *http.Request) {
+		var (
+			ctx = r.Context()
+			app = &momo.App{
+				ID: getID(r),
+			}
+			name      = chi.URLParam(r, "name")
+			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
+		)
+
+		if err := momo.ValidateApp(app); err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+
+		if err := momosql.SelectApp(ctx, db, app); err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, name, pretty)
+		if err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+		defer rc.Close()
+
+		w.Header().Set("Content-Type", contentType)
+		_, _ = io.Copy(w, rc)
+	})
+
+	r.Get(fmt.Sprintf("/apps/%s/%s", appParam, fileParam), func(w http.ResponseWriter, r *http.Request) {
+		var (
+			ctx = r.Context()
+			app = &momo.App{
+				Name: getApp(r),
+			}
+			file      = getFile(r)
+			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
+		)
+
+		if err := momo.ValidateApp(app); err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+
+		if err := momosql.SelectApp(ctx, db, app); err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
+		if err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+		defer rc.Close()
+
+		w.Header().Set("Content-Type", contentType)
+		_, _ = io.Copy(w, rc)
+	})
+
+	r.Get(fmt.Sprintf("/apps/%s/%s/%s", appParam, versionParam, fileParam), func(w http.ResponseWriter, r *http.Request) {
+		var (
+			ctx = r.Context()
+			app = &momo.App{
+				Name:    getApp(r),
+				Version: getVersion(r),
+			}
+			file      = getFile(r)
+			pretty, _ = strconv.ParseBool(r.URL.Query().Get("pretty"))
+		)
+
+		if err := momo.ValidateApp(app); err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+
+		if err := momosql.SelectApp(ctx, db, app); err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
+		if err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+		defer rc.Close()
+
+		w.Header().Set("Content-Type", contentType)
+		_, _ = io.Copy(w, rc)
+	})
+
+	r.Get(fmt.Sprintf("/apps/%s/download-manifest", idParam), func(w http.ResponseWriter, r *http.Request) {
+		downloadManifest(
+			&momo.App{
+				ID: getID(r),
+			},
+			db, base, w, r,
+		)
+	})
+
+	r.Get(fmt.Sprintf("/apps/%s/download-manifest", appParam), func(w http.ResponseWriter, r *http.Request) {
+		downloadManifest(
+			&momo.App{
+				Name: getApp(r),
+			},
+			db, base, w, r,
+		)
+	})
+
+	r.Get(fmt.Sprintf("/apps/%s/%s/download-manifest", appParam, versionParam), func(w http.ResponseWriter, r *http.Request) {
+		downloadManifest(
+			&momo.App{
+				Name:    getApp(r),
+				Version: getVersion(r),
+			},
+			db, base, w, r,
+		)
+	})
+
+	r.NotFound(http.NotFound)
 
 	return r
 }

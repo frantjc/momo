@@ -12,12 +12,12 @@ import (
 
 type App struct {
 	ID                     string    `json:"id,omitempty" unixtable:"-"`
-	Name                   string    `json:"name,omitempty"`
-	Version                string    `json:"version,omitempty"`
-	Status                 string    `json:"status,omitempty"`
+	Name                   string    `json:"name,omitempty" unixtable:",omitempty"`
+	Version                string    `json:"version,omitempty" unixtable:",omitempty"`
+	Status                 string    `json:"status,omitempty" unixtable:",omitempty"`
 	BundleName             string    `json:"bundleName,omitempty" unixtable:"-"`
-	BundleIdentifier       string    `json:"bundleIdentifier,omitempty"`
-	SHA256CertFingerprints string    `json:"sha256CertFingerprints,omitempty"`
+	BundleIdentifier       string    `json:"bundleIdentifier,omitempty" unixtable:",omitempty"`
+	SHA256CertFingerprints string    `json:"sha256CertFingerprints,omitempty" unixtable:",omitempty"`
 	Created                time.Time `json:"created,omitempty" unixtable:"-"`
 	Updated                time.Time `json:"updated,omitempty" unixtable:"-"`
 }
