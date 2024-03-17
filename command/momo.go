@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -91,7 +92,6 @@ func newSrv() *cobra.Command {
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
-			Args:          cobra.MinimumNArgs(2),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				var (
 					ctx = cmd.Context()
@@ -154,6 +154,7 @@ func newSrv() *cobra.Command {
 				var (
 					base = new(url.URL)
 					errC = make(chan error)
+					handler  http.Handler
 				)
 				if urlstr := cmd.Flag("url").Value.String(); urlstr != "" {
 					if base, err = url.Parse(urlstr); err != nil {
@@ -161,29 +162,32 @@ func newSrv() *cobra.Command {
 					}
 				}
 
-				remix, exec, err := momohttp.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
-				if err != nil {
-					return err
-				}
-
-				// A rough algorithm for making the working directory of
-				// the exec the directory of the entrypoint in the case
-				// of the args being something like `node /app/server.js`.
-				for _, entrypoint := range args[1:] {
-					if fi, err := os.Stat(entrypoint); err == nil {
-						if fi.IsDir() {
-							exec.Dir = filepath.Clean(entrypoint)
-						} else {
-							exec.Dir = filepath.Dir(entrypoint)
-						}
-						break
+				if len(args) > 0 {
+					var exec *exec.Cmd
+					handler, exec, err = momohttp.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
+					if err != nil {
+						return err
 					}
-				}
 
-				go func() {
-					log.Info("running remix")
-					errC <- exec.Run()
-				}()
+					// A rough algorithm for making the working directory of
+					// the exec the directory of the entrypoint in the case
+					// of the args being something like `node /app/server.js`.
+					for _, entrypoint := range args[1:] {
+						if fi, err := os.Stat(entrypoint); err == nil {
+							if fi.IsDir() {
+								exec.Dir = filepath.Clean(entrypoint)
+							} else {
+								exec.Dir = filepath.Dir(entrypoint)
+							}
+							break
+						}
+					}
+
+					go func() {
+						log.Info("running remix")
+						errC <- exec.Run()
+					}()
+				}
 
 				var (
 					api = momohttp.NewHandler(bucket, db, topic, base)
@@ -201,7 +205,7 @@ func newSrv() *cobra.Command {
 							})),
 							ingress.PrefixPath("/api", api),
 							ingress.PrefixPath("/apps", api),
-							ingress.PrefixPath("/", remix),
+							ingress.PrefixPath("/", handler),
 						),
 					}
 				)

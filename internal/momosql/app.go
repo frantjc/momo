@@ -11,6 +11,7 @@ import (
 	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/internal/momoerr"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 func Migrate(ctx context.Context, db *sql.DB) error {
@@ -37,31 +38,28 @@ func SelectApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 		if err := db.QueryRowContext(ctx,
 			"SELECT name, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app WHERE id = $1",
 			app.ID,
-		).Scan(&app.Name, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); errors.Is(err, sql.ErrNoRows) {
-			return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-		} else if err != nil {
-			return err
+		).Scan(&app.Name, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
+			return handleErr(err)
 		}
 	} else if app.Name != "" && app.Version != "" {
 		if err := db.QueryRowContext(ctx,
 			"SELECT id, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app WHERE name = $1 AND version = $2",
 			app.Name, app.Version,
-		).Scan(&app.ID, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); errors.Is(err, sql.ErrNoRows) {
-			return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-		} else if err != nil {
-			return err
+		).Scan(&app.ID, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
+			return handleErr(err)
 		}
 	} else if app.Name != "" {
 		if err := db.QueryRowContext(ctx,
 			"SELECT id, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app WHERE name = $1 ORDER BY created",
 			app.Name,
-		).Scan(&app.ID, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); errors.Is(err, sql.ErrNoRows) {
-			return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-		} else if err != nil {
-			return err
+		).Scan(&app.ID, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
+			return handleErr(err)
 		}
 	} else {
-		return fmt.Errorf("unable to uniquely identify app")
+		return momoerr.HTTPStatusCodeError(
+			fmt.Errorf("unable to uniquely identify app"),
+			http.StatusBadRequest,
+		)
 	}
 
 	return nil
@@ -85,7 +83,7 @@ func SelectApps(ctx context.Context, db *sql.DB, limit, offset int) ([]momo.App,
 		_limit, _offset,
 	)
 	if err != nil {
-		return nil, err
+		return nil, handleErr(err)
 	}
 
 	apps := []momo.App{}
@@ -93,14 +91,14 @@ func SelectApps(ctx context.Context, db *sql.DB, limit, offset int) ([]momo.App,
 		app := momo.App{}
 
 		if err = rows.Scan(&app.ID, &app.Name, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
-			return nil, err
+			return nil, handleErr(err)
 		}
 
 		apps = append(apps, app)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, handleErr(err)
 	}
 
 	if err = rows.Close(); err != nil {
@@ -116,10 +114,8 @@ func InsertApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 	if err := db.QueryRowContext(ctx,
 		"INSERT INTO app (id, name, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier) VALUES ($1, $2, $3, $4, $5, $6, $7) returning created, updated",
 		app.ID, app.Name, app.Version, app.Status, app.SHA256CertFingerprints, app.BundleName, app.BundleIdentifier,
-	).Scan(&app.Created, &app.Updated); errors.Is(err, sql.ErrNoRows) {
-		return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-	} else if err != nil {
-		return err
+	).Scan(&app.Created, &app.Updated); err != nil {
+		return handleErr(err)
 	}
 
 	return nil
@@ -132,10 +128,8 @@ func UpdateApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 		if err := db.QueryRowContext(ctx,
 			"UPDATE app SET (name, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, updated) = ($2, $3, $4, $5, $6, $7, $8) WHERE id = $1 RETURNING created",
 			app.ID, app.Name, app.Version, app.Status, app.SHA256CertFingerprints, app.BundleName, app.BundleIdentifier, app.Updated,
-		).Scan(&app.Created); errors.Is(err, sql.ErrNoRows) {
-			return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-		} else if err != nil {
-			return err
+		).Scan(&app.Created); err != nil {
+			return handleErr(err)
 		}
 	} else if app.Name != "" && app.Version != "" {
 		app.Updated = time.Now()
@@ -143,14 +137,36 @@ func UpdateApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 		if err := db.QueryRowContext(ctx,
 			"UPDATE app SET (status, sha256_cert_fingerprints, bundle_name, bundle_identifier, updated) = ($3, $4, $5, $6, $7) WHERE name = $1 AND version = $2 RETURNING id, created",
 			app.Name, app.Version, app.Status, app.SHA256CertFingerprints, app.BundleName, app.BundleIdentifier, app.Updated,
-		).Scan(&app.ID, &app.Created); errors.Is(err, sql.ErrNoRows) {
-			return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-		} else if err != nil {
-			return err
+		).Scan(&app.ID, &app.Created); err != nil {
+			return handleErr(err)
 		}
 	} else {
-		return fmt.Errorf("unable to uniquely identify app")
+		return momoerr.HTTPStatusCodeError(
+			fmt.Errorf("unable to uniquely identify app"),
+			http.StatusBadRequest,
+		)
 	}
 
 	return nil
+}
+
+var (
+	httpStatusCodes = map[pq.ErrorCode]int{
+		"23505": http.StatusConflict,
+	}
+)
+
+func handleErr(err error) error {
+	pqErr := &pq.Error{}
+	if err == nil {
+		return nil
+	} else if errors.Is(err, sql.ErrNoRows) {
+		return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
+	} else if errors.As(err, &pqErr) {
+		if httpStatusCode, ok := httpStatusCodes[pqErr.Code]; ok {
+			return momoerr.HTTPStatusCodeError(pqErr, httpStatusCode)
+		}
+	}
+
+	return err
 }
