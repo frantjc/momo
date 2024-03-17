@@ -152,9 +152,9 @@ func newSrv() *cobra.Command {
 				defer subscription.Shutdown(ctx)
 
 				var (
-					base = new(url.URL)
-					errC = make(chan error)
-					handler  http.Handler
+					base    = new(url.URL)
+					errC    = make(chan error)
+					handler http.Handler
 				)
 				if urlstr := cmd.Flag("url").Value.String(); urlstr != "" {
 					if base, err = url.Parse(urlstr); err != nil {

@@ -6,8 +6,8 @@ type UsesFramework struct {
 }
 
 type SDKInfo struct {
-	MinSDKVersion    []int `yaml:"minSdkVersion"`
-	TargetSDKVersion any   `yaml:"targetSdkVersion"`
+	MinSDKVersion    int `yaml:"minSdkVersion"`
+	TargetSDKVersion int `yaml:"targetSdkVersion"`
 }
 
 type PackageInfo struct {

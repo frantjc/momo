@@ -16,7 +16,7 @@ import (
 
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS app (
-	id VARCHAR (36) PRIMARY KEY,
+	id UUID PRIMARY KEY,
 	name VARCHAR (32) NOT NULL,
 	version VARCHAR (32),
 	status TEXT NOT NULL DEFAULT 'unknown',
