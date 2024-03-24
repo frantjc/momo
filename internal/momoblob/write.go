@@ -71,7 +71,7 @@ func WriteUpload(ctx context.Context, bucket *blob.Bucket, db *sql.DB, mediaType
 	} else {
 		return momoerr.HTTPStatusCodeError(
 			fmt.Errorf("unsupported Content-Type %s", mediaType),
-			http.StatusNotAcceptable,
+			http.StatusUnsupportedMediaType,
 		)
 	}
 

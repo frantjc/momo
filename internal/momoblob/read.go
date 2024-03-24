@@ -41,7 +41,7 @@ func NewAppFileReader(ctx context.Context, bucket *blob.Bucket, base *url.URL, a
 		rc, err = bucket.NewReader(ctx, DisplayImageKey(app.ID), nil)
 	case strings.EqualFold(file, "manifest.plist"):
 		if app.BundleIdentifier == "" || app.BundleName == "" || app.Version == "" {
-			return nil, "", momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
+			return nil, "", momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusPreconditionFailed)
 		} else if exists, _ := bucket.Exists(ctx, IPAKey(app.ID)); !exists {
 			return nil, "", momoerr.HTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
 		}

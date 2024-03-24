@@ -1,3 +1,4 @@
+import { Container } from "@mui/material";
 import type { MetaFunction } from "@remix-run/node";
 import { AppUploadForm } from "~/components";
 
@@ -10,6 +11,8 @@ export const meta: MetaFunction = () => {
 
 export default function Index() {
   return (
-    <AppUploadForm />
+    <Container>
+      <AppUploadForm />
+    </Container>
   );
 }

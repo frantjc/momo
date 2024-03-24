@@ -5,6 +5,7 @@ import { hydrateRoot } from "react-dom/client";
 
 import { ClientStyleContext } from "~/context";
 import createEmotionCache, { defaultCache } from "~/create_emotion_cache";
+import { Themed } from "~/theme";
 
 interface ClientCacheProviderProps {
   children: React.ReactNode;
@@ -13,13 +14,13 @@ interface ClientCacheProviderProps {
 function ClientCacheProvider({ children }: ClientCacheProviderProps) {
   const [cache, setCache] = React.useState(defaultCache)
 
-  function reset() {
-    setCache(createEmotionCache())
-  }
+  const reset = React.useCallback(() => {
+    setCache(createEmotionCache());
+  }, [setCache]);
 
   return (
-    <ClientStyleContext.Provider value={{ reset }}>
-      <CacheProvider value={cache}>{children}</CacheProvider>
+    <ClientStyleContext.Provider value={{ reset }}>  
+      <CacheProvider value={cache}><Themed>{children}</Themed></CacheProvider>
     </ClientStyleContext.Provider>
   )
 }

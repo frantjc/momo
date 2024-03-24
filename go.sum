@@ -71,6 +71,12 @@ github.com/frantjc/go-encoding-unixtable v0.0.0-20240317182538-5ae20447bc33 h1:A
 github.com/frantjc/go-encoding-unixtable v0.0.0-20240317182538-5ae20447bc33/go.mod h1:HUUoLc0e0ZrspVYKTtl7QoQj5iKmGTNXoLlvDZy9yW0=
 github.com/frantjc/go-encoding-unixtable v0.0.0-20240317183554-eb24e39adb84 h1:165rSvUAr4YjSwtE6bY5mUrCino70/f5HFi/jGd5QpQ=
 github.com/frantjc/go-encoding-unixtable v0.0.0-20240317183554-eb24e39adb84/go.mod h1:HUUoLc0e0ZrspVYKTtl7QoQj5iKmGTNXoLlvDZy9yW0=
+github.com/frantjc/go-encoding-unixtable v0.0.0-20240317185119-e068d8069c27 h1:V+SiSdjsUNk5akq7PUQCEdVpvjrVzgIkPxsYj54yEgA=
+github.com/frantjc/go-encoding-unixtable v0.0.0-20240317185119-e068d8069c27/go.mod h1:HUUoLc0e0ZrspVYKTtl7QoQj5iKmGTNXoLlvDZy9yW0=
+github.com/frantjc/go-encoding-unixtable v0.0.0-20240317193850-ad3156708b10 h1:uN6qf27sJpZ0hGUZVKkWUfx7NE3cDcbfwVbQ72w9CJ0=
+github.com/frantjc/go-encoding-unixtable v0.0.0-20240317193850-ad3156708b10/go.mod h1:HUUoLc0e0ZrspVYKTtl7QoQj5iKmGTNXoLlvDZy9yW0=
+github.com/frantjc/go-encoding-unixtable v0.0.0-20240317200037-652fb1be2aeb h1:mS2zPLMMInW34joBMpg9QNtAkNF0cajaG9UwV36Tzmw=
+github.com/frantjc/go-encoding-unixtable v0.0.0-20240317200037-652fb1be2aeb/go.mod h1:HUUoLc0e0ZrspVYKTtl7QoQj5iKmGTNXoLlvDZy9yW0=
 github.com/frantjc/go-ingress v0.1.1 h1:qT1Wy03bMtEVuZomM2FJgK1TViHRxuEV/xsOGlzy/Sw=
 github.com/frantjc/go-ingress v0.1.1/go.mod h1:C/oNT54NfMlg+8M6O2M3OLhB7/HvLPDObkJerC8r+yA=
 github.com/frantjc/go-ingress v0.2.0 h1:qlZbeywNxCxYN9/uJ1ccEefTP7vArgnzRvACDMjQLiA=

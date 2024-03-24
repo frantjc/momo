@@ -3,13 +3,12 @@ package momohttp
 import (
 	"database/sql"
 	"net/http"
-	"net/url"
 
 	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/internal/momosql"
 )
 
-func downloadManifest(db *sql.DB, base *url.URL) http.HandlerFunc {
+func getApp(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var (
 			ctx    = r.Context()
@@ -27,13 +26,6 @@ func downloadManifest(db *sql.DB, base *url.URL) http.HandlerFunc {
 			return
 		}
 
-		values := url.Values{}
-		values.Add("action", "download-manifest")
-		values.Add("url", base.JoinPath("/apps", app.Name, "manifest.plist").String())
-
-		http.Redirect(w, r, (&url.URL{
-			Scheme:   "itms-services",
-			RawQuery: values.Encode(),
-		}).String(), http.StatusMovedPermanently)
+		_ = respondJSON(w, app, pretty)
 	}
 }

@@ -3,7 +3,9 @@ package momohttp
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
+	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/internal/momoregexp"
 	"github.com/go-chi/chi/v5"
 )
@@ -15,18 +17,31 @@ var (
 	versionParam = "{version}"
 )
 
-func getID(r *http.Request) string {
+func appID(r *http.Request) string {
 	return chi.URLParam(r, "id")
 }
 
-func getFile(r *http.Request) string {
+func file(r *http.Request) string {
 	return chi.URLParam(r, "file")
 }
 
-func getApp(r *http.Request) string {
+func appName(r *http.Request) string {
 	return chi.URLParam(r, "app")
 }
 
-func getVersion(r *http.Request) string {
+func appVersion(r *http.Request) string {
 	return chi.URLParam(r, "version")
+}
+
+func app(r *http.Request) *momo.App {
+	return &momo.App{
+		ID:      appID(r),
+		Name:    appName(r),
+		Version: appVersion(r),
+	}
+}
+
+func pretty(r *http.Request) bool {
+	pretty, _ := strconv.ParseBool(r.URL.Query().Get("pretty"))
+	return pretty
 }

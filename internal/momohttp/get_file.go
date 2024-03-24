@@ -2,18 +2,22 @@ package momohttp
 
 import (
 	"database/sql"
+	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/frantjc/momo"
+	"github.com/frantjc/momo/internal/momoblob"
 	"github.com/frantjc/momo/internal/momosql"
+	"gocloud.dev/blob"
 )
 
-func downloadManifest(db *sql.DB, base *url.URL) http.HandlerFunc {
+func getFile(base *url.URL, bucket *blob.Bucket, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var (
 			ctx    = r.Context()
 			app    = app(r)
+			file   = file(r)
 			pretty = pretty(r)
 		)
 
@@ -27,13 +31,14 @@ func downloadManifest(db *sql.DB, base *url.URL) http.HandlerFunc {
 			return
 		}
 
-		values := url.Values{}
-		values.Add("action", "download-manifest")
-		values.Add("url", base.JoinPath("/apps", app.Name, "manifest.plist").String())
+		rc, contentType, err := momoblob.NewAppFileReader(ctx, bucket, base, app, file, pretty)
+		if err != nil {
+			_ = respondErrorJSON(w, err, pretty)
+			return
+		}
+		defer rc.Close()
 
-		http.Redirect(w, r, (&url.URL{
-			Scheme:   "itms-services",
-			RawQuery: values.Encode(),
-		}).String(), http.StatusMovedPermanently)
+		w.Header().Set("Content-Type", contentType)
+		_, _ = io.Copy(w, rc)
 	}
 }
