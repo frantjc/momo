@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -17,6 +19,18 @@ import (
 	"github.com/frantjc/momo/internal/momosql"
 	"gocloud.dev/blob"
 )
+
+func WriteImage(w io.WriteCloser, img image.Image) error {
+	if err := png.Encode(w, img); err != nil {
+		return err
+	}
+
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func WriteUpload(ctx context.Context, bucket *blob.Bucket, db *sql.DB, mediaType, boundary string, app *momo.App, body io.Reader) error {
 	var (

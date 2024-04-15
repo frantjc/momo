@@ -2,20 +2,11 @@ package momo
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
-	"image/jpeg"
-	"image/png"
 	"io"
-	"path/filepath"
-	"strings"
-)
-
-var (
-	ErrIconNotFound = errors.New("icon not found")
 )
 
 type AppDecoder interface {
@@ -23,18 +14,12 @@ type AppDecoder interface {
 	Close() error
 }
 
-func BestFitIcon(ctx context.Context, dimensions int, extension string, appDecoders ...AppDecoder) (io.Reader, error) {
+func BestFitIcon(ctx context.Context, dimensions int, appDecoders ...AppDecoder) (image.Image, error) {
 	if dimensions <= 0 {
 		return nil, fmt.Errorf("dimensions <0")
-	} else if extension == "" {
-		return nil, fmt.Errorf("extension empty")
 	}
 
-	var (
-		bestFitDimensions int
-		bestFitBytes      []byte
-	)
-
+	var bestFitImg image.Image
 	for _, appDecoder := range appDecoders {
 		icons, err := appDecoder.Icons(ctx)
 		if err != nil {
@@ -43,55 +28,34 @@ func BestFitIcon(ctx context.Context, dimensions int, extension string, appDecod
 
 		tr := tar.NewReader(icons)
 		for {
-			hdr, err := tr.Next()
-			if errors.Is(err, io.EOF) {
+			if _, err := tr.Next(); errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				return nil, err
 			}
 
-			var (
-				img image.Image
-				ext = strings.ToLower(filepath.Ext(hdr.Name))
-			)
-			if !strings.EqualFold(ext, extension) {
-				continue
-			}
-
-			b, err := io.ReadAll(tr)
+			img, _, err := image.Decode(tr)
 			if err != nil {
 				return nil, err
 			}
 
-			switch ext {
-			case ".png":
-				img, err = png.Decode(bytes.NewReader(b))
-			case ".jpg", "jpeg":
-				img, err = jpeg.Decode(bytes.NewReader(b))
-			}
-			if err != nil {
-				if len(bestFitBytes) == 0 {
-					bestFitBytes = b
-				}
-
-				continue
-			}
-
-			if imgDimensions := img.Bounds().Dx(); (bestFitDimensions < dimensions && imgDimensions > bestFitDimensions) ||
+			var (
+				bestFitDimensions = bestFitImg.Bounds().Dx()
+				imgDimensions     = img.Bounds().Dx()
+			)
+			if (bestFitDimensions < dimensions && imgDimensions > bestFitDimensions) ||
 				(bestFitDimensions > dimensions && imgDimensions < bestFitDimensions && imgDimensions >= dimensions) {
-				bestFitDimensions = imgDimensions
-				bestFitBytes = b
-			}
-
-			if bestFitDimensions == dimensions {
-				break
+				bestFitImg = img
+				if imgDimensions == dimensions {
+					break
+				}
 			}
 		}
 	}
 
-	if len(bestFitBytes) == 0 {
-		return nil, ErrIconNotFound
+	if bestFitImg == nil {
+		return nil, fmt.Errorf("icon not found")
 	}
 
-	return bytes.NewReader(bestFitBytes), nil
+	return bestFitImg, nil
 }

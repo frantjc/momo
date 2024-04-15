@@ -1,6 +1,7 @@
 package momoimg
 
 import (
+	// Embed the bytes of an image.
 	_ "embed"
 )
 

@@ -1,10 +1,14 @@
-package android
+package android_test
 
 import (
 	"bytes"
-	_ "embed"
 	"encoding/xml"
 	"testing"
+
+	// Used to embed the bytes of test XML.
+	_ "embed"
+
+	"github.com/frantjc/momo/android"
 )
 
 var (
@@ -13,7 +17,7 @@ var (
 )
 
 func TestUnmarshalAndroindManifest(t *testing.T) {
-	manifest := &Manifest{}
+	manifest := &android.Manifest{}
 	if err := xml.NewDecoder(bytes.NewReader(data)).Decode(manifest); err != nil {
 		t.Error(err)
 		t.FailNow()

@@ -52,5 +52,6 @@ func (c Command) Decode(ctx context.Context, name string, opts *DecodeOpts) erro
 
 	args = append(args, name)
 
+	//nolint:gosec
 	return exec.CommandContext(ctx, c.String(), args...).Run()
 }

@@ -34,28 +34,29 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 }
 
 func SelectApp(ctx context.Context, db *sql.DB, app *momo.App) error {
-	if app.ID != "" {
+	switch {
+	case app.ID != "":
 		if err := db.QueryRowContext(ctx,
 			"SELECT name, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app WHERE id = $1",
 			app.ID,
 		).Scan(&app.Name, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
 			return wrapErr(err)
 		}
-	} else if app.Name != "" && app.Version != "" {
+	case app.Name != "" && app.Version != "":
 		if err := db.QueryRowContext(ctx,
 			"SELECT id, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app WHERE name = $1 AND version = $2",
 			app.Name, app.Version,
 		).Scan(&app.ID, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
 			return wrapErr(err)
 		}
-	} else if app.Name != "" {
+	case app.Name != "":
 		if err := db.QueryRowContext(ctx,
 			"SELECT id, version, status, sha256_cert_fingerprints, bundle_name, bundle_identifier, created, updated FROM app WHERE name = $1 ORDER BY created",
 			app.Name,
 		).Scan(&app.ID, &app.Version, &app.Status, &app.SHA256CertFingerprints, &app.BundleName, &app.BundleIdentifier, &app.Created, &app.Updated); err != nil {
 			return wrapErr(err)
 		}
-	} else {
+	default:
 		return momoerr.HTTPStatusCodeError(
 			fmt.Errorf("unable to uniquely identify app"),
 			http.StatusBadRequest,
@@ -133,7 +134,8 @@ func InsertApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 }
 
 func UpdateApp(ctx context.Context, db *sql.DB, app *momo.App) error {
-	if app.ID != "" {
+	switch {
+	case app.ID != "":
 		app.Updated = time.Now()
 
 		if err := db.QueryRowContext(ctx,
@@ -142,7 +144,7 @@ func UpdateApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 		).Scan(&app.Created); err != nil {
 			return wrapErr(err)
 		}
-	} else if app.Name != "" && app.Version != "" {
+	case app.Name != "" && app.Version != "":
 		app.Updated = time.Now()
 
 		if err := db.QueryRowContext(ctx,
@@ -151,7 +153,7 @@ func UpdateApp(ctx context.Context, db *sql.DB, app *momo.App) error {
 		).Scan(&app.ID, &app.Created); err != nil {
 			return wrapErr(err)
 		}
-	} else {
+	default:
 		return momoerr.HTTPStatusCodeError(
 			fmt.Errorf("unable to uniquely identify app"),
 			http.StatusBadRequest,
@@ -169,11 +171,12 @@ var (
 
 func wrapErr(err error) error {
 	pqErr := &pq.Error{}
-	if err == nil {
+	switch {
+	case err == nil:
 		return nil
-	} else if errors.Is(err, sql.ErrNoRows) {
+	case errors.Is(err, sql.ErrNoRows):
 		return momoerr.HTTPStatusCodeError(err, http.StatusNotFound)
-	} else if errors.As(err, &pqErr) {
+	case errors.As(err, &pqErr):
 		if httpStatusCode, ok := httpStatusCodes[pqErr.Code]; ok {
 			return momoerr.HTTPStatusCodeError(pqErr, httpStatusCode)
 		}

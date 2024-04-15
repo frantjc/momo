@@ -24,7 +24,7 @@ import (
 	"github.com/frantjc/momo/internal/momopubsub"
 	"github.com/frantjc/momo/internal/momoregexp"
 	"github.com/frantjc/momo/internal/momosql"
-	"github.com/frantjc/x/slice"
+	xslice "github.com/frantjc/x/slice"
 	"github.com/spf13/cobra"
 	"gocloud.dev/blob"
 	"gocloud.dev/postgres"
@@ -142,14 +142,14 @@ func newSrv() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				defer topic.Shutdown(ctx)
+				defer topic.Shutdown(ctx) //nolint:errcheck
 
 				log.Info("opening subscription " + pubsuburlstr)
 				subscription, err := pubsub.OpenSubscription(ctx, pubsuburlstr)
 				if err != nil {
 					return err
 				}
-				defer subscription.Shutdown(ctx)
+				defer subscription.Shutdown(ctx) //nolint:errcheck
 
 				var (
 					base = new(url.URL)
@@ -190,10 +190,10 @@ func newSrv() *cobra.Command {
 				}
 
 				ing.Paths = []ingress.Path{
-					ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ingress.ExactPath("/healthz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 						fmt.Fprint(w, "ok")
 					})),
-					ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ingress.ExactPath("/readyz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 						fmt.Fprint(w, "ok")
 					})),
 					ingress.PrefixPath("/api", momohttp.NewAPIHandler(bucket, db, topic, ing.DefaultBackend)),
@@ -203,7 +203,7 @@ func newSrv() *cobra.Command {
 				var (
 					srv = &http.Server{
 						ReadHeaderTimeout: time.Second * 5,
-						BaseContext: func(l net.Listener) context.Context {
+						BaseContext: func(_ net.Listener) context.Context {
 							return ctx
 						},
 						Handler: ing,
@@ -252,7 +252,7 @@ func newPing() *cobra.Command {
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
-			RunE: func(cmd *cobra.Command, args []string) error {
+			RunE: func(cmd *cobra.Command, _ []string) error {
 				var (
 					ctx = cmd.Context()
 					cli = new(momo.Client)
@@ -304,7 +304,7 @@ func newGetApps() *cobra.Command {
 			Version:       momo.SemVer(),
 			SilenceErrors: true,
 			SilenceUsage:  true,
-			RunE: func(cmd *cobra.Command, args []string) error {
+			RunE: func(cmd *cobra.Command, _ []string) error {
 				var (
 					ctx = cmd.Context()
 					cli = new(momo.Client)
@@ -351,11 +351,12 @@ func newGetApp() *cobra.Command {
 
 				switch len(args) {
 				case 1:
-					if momoregexp.IsUUID(args[0]) {
+					switch {
+					case momoregexp.IsUUID(args[0]):
 						app.ID = args[0]
-					} else if momoregexp.IsAppName(args[0]) {
+					case momoregexp.IsAppName(args[0]):
 						app.Name = args[0]
-					} else {
+					default:
 						return fmt.Errorf("invalid argument %s", args[0])
 					}
 				case 2:

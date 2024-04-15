@@ -1,6 +1,8 @@
 package ios
 
 import (
+	// Document what package can be used to unmarshal
+	// an info.plist into the struct below.
 	_ "howett.net/plist"
 )
 

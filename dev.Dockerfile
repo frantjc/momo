@@ -27,7 +27,6 @@ RUN apk add --no-cache \
         && apk del .build-deps
 
 ENV YARN_VERSION 1.22.19
-
 RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg tar \
   && export GNUPGHOME="$(mktemp -d)" \
   && for key in \

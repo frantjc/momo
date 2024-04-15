@@ -129,6 +129,7 @@ func (a *APKDecoder) Metadata(ctx context.Context) (*apktool.Metadata, error) {
 func (a *APKDecoder) SHA256CertFingerprints(ctx context.Context) (string, error) {
 	var (
 		buf = new(bytes.Buffer)
+		//nolint:gosec
 		cmd = exec.CommandContext(ctx, "keytool", "-printcert", "-jarfile", a.Name)
 	)
 

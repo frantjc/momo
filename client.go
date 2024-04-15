@@ -38,13 +38,14 @@ func (c *Client) GetApp(ctx context.Context, app *App) error {
 
 	elems := []string{"/api/v1/apps"}
 
-	if app.ID != "" {
+	switch {
+	case app.ID != "":
 		elems = append(elems, app.ID)
-	} else if app.Name != "" && app.Version != "" {
+	case app.Name != "" && app.Version != "":
 		elems = append(elems, app.Name, app.Version)
-	} else if app.Name != "" {
+	case app.Name != "":
 		elems = append(elems, app.Name)
-	} else {
+	default:
 		return fmt.Errorf("unable to uniquely identify app")
 	}
 
@@ -127,11 +128,12 @@ func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType stri
 
 	elems := []string{"/api/v1/apps"}
 
-	if app.Name != "" && app.Version != "" {
+	switch {
+	case app.Name != "" && app.Version != "":
 		elems = append(elems, app.Name, app.Version)
-	} else if app.Name != "" {
+	case app.Name != "":
 		elems = append(elems, app.Name)
-	} else {
+	default:
 		return fmt.Errorf("unable to uniquely identify app")
 	}
 

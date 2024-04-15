@@ -86,7 +86,7 @@ var (
 	_ momo.AppDecoder = &IPADecoder{}
 )
 
-func (i *IPADecoder) Icons(ctx context.Context) (io.Reader, error) {
+func (i *IPADecoder) Icons(_ context.Context) (io.Reader, error) {
 	zr, err := i.zipReader()
 	if err != nil {
 		return nil, err

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,9 +33,11 @@ func Unpack(ctx context.Context, bucket *blob.Bucket, tr *tar.Reader, app *momo.
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
-		} else if err != nil {
+		}
+		switch {
+		case err != nil:
 			return err
-		} else if strings.HasPrefix(hdr.Name, "._") {
+		case strings.HasPrefix(hdr.Name, "._"):
 			continue
 		}
 
@@ -53,25 +56,16 @@ func Unpack(ctx context.Context, bucket *blob.Bucket, tr *tar.Reader, app *momo.
 				return err
 			}
 
-			if _, err := io.Copy(f, tr); err != nil {
-				return err
-			}
-
-			if err = f.Close(); err != nil {
-				return err
-			}
-
-			f, err = os.Open(f.Name())
-			if err != nil {
-				return err
-			}
-
 			apkW, err := bucket.NewWriter(ctx, momoblob.APKKey(app.ID), nil)
 			if err != nil {
 				return err
 			}
 
-			if _, err := io.Copy(apkW, f); err != nil {
+			if _, err := io.Copy(io.MultiWriter(f, apkW), tr); err != nil {
+				return err
+			}
+
+			if err = f.Close(); err != nil {
 				return err
 			}
 
@@ -104,25 +98,16 @@ func Unpack(ctx context.Context, bucket *blob.Bucket, tr *tar.Reader, app *momo.
 				return err
 			}
 
-			if _, err := io.Copy(f, tr); err != nil {
-				return err
-			}
-
-			if err = f.Close(); err != nil {
-				return err
-			}
-
-			f, err = os.Open(f.Name())
-			if err != nil {
-				return err
-			}
-
 			ipaW, err := bucket.NewWriter(ctx, momoblob.IPAKey(app.ID), nil)
 			if err != nil {
 				return err
 			}
 
-			if _, err := io.Copy(ipaW, f); err != nil {
+			if _, err := io.Copy(io.MultiWriter(f, ipaW), tr); err != nil {
+				return err
+			}
+
+			if err = f.Close(); err != nil {
 				return err
 			}
 
@@ -145,31 +130,33 @@ func Unpack(ctx context.Context, bucket *blob.Bucket, tr *tar.Reader, app *momo.
 		case strings.EqualFold(ext, ".png"):
 			switch {
 			case strings.Contains(base, "full") && strings.Contains(base, "size"):
+				img, _, err := image.Decode(tr)
+				if err != nil {
+					return err
+				}
+
 				w, err := bucket.NewWriter(ctx, momoblob.FullSizeImageKey(app.ID), nil)
 				if err != nil {
 					return err
 				}
 
-				if _, err := io.Copy(w, tr); err != nil {
-					return err
-				}
-
-				if err = w.Close(); err != nil {
+				if err = momoblob.WriteImage(w, img); err != nil {
 					return err
 				}
 
 				foundFullSizeImage = true
 			case strings.Contains(base, "display"):
+				img, _, err := image.Decode(tr)
+				if err != nil {
+					return err
+				}
+
 				w, err := bucket.NewWriter(ctx, momoblob.DisplayImageKey(app.ID), nil)
 				if err != nil {
 					return err
 				}
 
-				if _, err := io.Copy(w, tr); err != nil {
-					return err
-				}
-
-				if err = w.Close(); err != nil {
+				if err = momoblob.WriteImage(w, img); err != nil {
 					return err
 				}
 
@@ -192,40 +179,26 @@ func Unpack(ctx context.Context, bucket *blob.Bucket, tr *tar.Reader, app *momo.
 	}
 
 	if !foundFullSizeImage {
-		if fullSizeImage, err := momo.BestFitIcon(ctx, 512, ".png", appDs...); errors.Is(err, momo.ErrIconNotFound) {
-		} else if err != nil {
-			return err
-		} else {
+		if fullSizeImage, err := momo.BestFitIcon(ctx, 512, appDs...); err == nil {
 			iconW, err := bucket.NewWriter(ctx, momoblob.FullSizeImageKey(app.ID), nil)
 			if err != nil {
 				return err
 			}
 
-			if _, err := io.Copy(iconW, fullSizeImage); err != nil {
-				return err
-			}
-
-			if err = iconW.Close(); err != nil {
+			if err = momoblob.WriteImage(iconW, fullSizeImage); err != nil {
 				return err
 			}
 		}
 	}
 
 	if !foundDisplayImage {
-		if displayImage, err := momo.BestFitIcon(ctx, 57, ".png", appDs...); errors.Is(err, momo.ErrIconNotFound) {
-		} else if err != nil {
-			return err
-		} else {
+		if displayImage, err := momo.BestFitIcon(ctx, 57, appDs...); err == nil {
 			iconW, err := bucket.NewWriter(ctx, momoblob.DisplayImageKey(app.ID), nil)
 			if err != nil {
 				return err
 			}
 
-			if _, err := io.Copy(iconW, displayImage); err != nil {
-				return err
-			}
-
-			if err = iconW.Close(); err != nil {
+			if err = momoblob.WriteImage(iconW, displayImage); err != nil {
 				return err
 			}
 		}

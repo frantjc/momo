@@ -87,8 +87,7 @@ func NewAppFileReader(ctx context.Context, bucket *blob.Bucket, base *url.URL, a
 		return io.NopCloser(buf), "application/xml", nil
 	}
 	if gcerrors.Code(err) == gcerrors.NotFound || rc == nil {
-		switch {
-		case strings.EqualFold(ext, ".png"):
+		if strings.EqualFold(ext, ".png") {
 			return io.NopCloser(bytes.NewReader(momoimg.QuestionMark)), "image/png", nil
 		}
 

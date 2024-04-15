@@ -11,9 +11,19 @@ import (
 	"github.com/frantjc/momo/command"
 	xos "github.com/frantjc/x/os"
 
+	// Register these formats in pkg
+	// `image` for decoding.
+	_ "image/jpeg"
+	_ "image/png"
+
+	// Register these schemes in pkg
+	// `gocloud.dev/blob`.
 	_ "gocloud.dev/blob/fileblob"
 	_ "gocloud.dev/blob/memblob"
 	_ "gocloud.dev/blob/s3blob"
+
+	// Register these schemes in pkg
+	// `gocloud.dev/pubsub`.
 	_ "gocloud.dev/pubsub/mempubsub"
 )
 
