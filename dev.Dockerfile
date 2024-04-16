@@ -25,7 +25,6 @@ RUN apk add --no-cache \
     rm -f "node-v$NODE_VERSION-linux-x64-musl.tar.xz" \
         && find /usr/local/include/node/openssl/archs -mindepth 1 -maxdepth 1 ! -name "linux-x86_64" -exec rm -rf {} \; \
         && apk del .build-deps
-
 ENV YARN_VERSION 1.22.19
 RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg tar \
   && export GNUPGHOME="$(mktemp -d)" \
