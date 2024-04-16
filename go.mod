@@ -13,6 +13,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.8.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/image v0.15.0
 	gocloud.dev v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 	howett.net/plist v1.0.1

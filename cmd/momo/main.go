@@ -15,6 +15,7 @@ import (
 	// `image` for decoding.
 	_ "image/jpeg"
 	_ "image/png"
+	_ "golang.org/x/image/webp"
 
 	// Register these schemes in pkg
 	// `gocloud.dev/blob`.

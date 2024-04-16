@@ -40,9 +40,13 @@ func BestFitIcon(ctx context.Context, dimensions int, appDecoders ...AppDecoder)
 			}
 
 			var (
-				bestFitDimensions = bestFitImg.Bounds().Dx()
+				bestFitDimensions = 0
 				imgDimensions     = img.Bounds().Dx()
 			)
+			if bestFitImg != nil {
+				bestFitDimensions = bestFitImg.Bounds().Dx()
+			}
+
 			if (bestFitDimensions < dimensions && imgDimensions > bestFitDimensions) ||
 				(bestFitDimensions > dimensions && imgDimensions < bestFitDimensions && imgDimensions >= dimensions) {
 				bestFitImg = img
