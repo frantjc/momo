@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	go.uber.org/zap v1.27.0
 	gocloud.dev v0.37.0
 	golang.org/x/image v0.17.0
