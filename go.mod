@@ -6,7 +6,7 @@ require (
 	github.com/frantjc/go-encoding-unixtable v0.0.0-20240317200037-652fb1be2aeb
 	github.com/frantjc/go-ingress v0.2.0
 	github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.0.14
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/uuid v1.6.0
