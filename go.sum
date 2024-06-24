@@ -73,8 +73,8 @@ github.com/frantjc/go-ingress v0.2.0 h1:qlZbeywNxCxYN9/uJ1ccEefTP7vArgnzRvACDMjQ
 github.com/frantjc/go-ingress v0.2.0/go.mod h1:C/oNT54NfMlg+8M6O2M3OLhB7/HvLPDObkJerC8r+yA=
 github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f h1:H2WGDYffgZ+aC3KnWaZv94tc4ZdvNmjIhfMuJSBNweU=
 github.com/frantjc/x v0.0.0-20231227080902-6c5dc9b6f03f/go.mod h1:jzQwn2fyR0LRUO37WetnmJkZWmVR2GjhCD1QuaAJSPo=
-github.com/go-chi/chi/v5 v5.0.12 h1:9euLV5sTrTNTRUU9POmDUvfxyj6LAABLUcEWO+JJb4s=
-github.com/go-chi/chi/v5 v5.0.12/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
+github.com/go-chi/chi/v5 v5.0.14 h1:PyEwo2Vudraa0x/Wl6eDRRW2NXBvekgfxyydcM0WGE0=
+github.com/go-chi/chi/v5 v5.0.14/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
 github.com/go-logr/logr v1.4.2 h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY=
 github.com/go-logr/logr v1.4.2/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
