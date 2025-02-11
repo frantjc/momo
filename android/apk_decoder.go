@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/apktool"
 	xslice "github.com/frantjc/x/slice"
 	"gopkg.in/yaml.v3"
@@ -25,7 +23,8 @@ import (
 type APKDecoder struct {
 	Name string
 
-	apktool  apktool.Command
+	apktool  string
+	keytool  string
 	dir      string
 	decoded  bool
 	manifest *Manifest
@@ -35,9 +34,15 @@ type APKDecoder struct {
 
 type APKDecoderOpt func(*APKDecoder)
 
-func WithAPKTool(c apktool.Command) APKDecoderOpt {
+func WithAPKTool(b string) APKDecoderOpt {
 	return func(a *APKDecoder) {
-		a.apktool = c
+		a.apktool = b
+	}
+}
+
+func WithKeytool(b string) APKDecoderOpt {
+	return func(a *APKDecoder) {
+		a.keytool = b
 	}
 }
 
@@ -48,7 +53,7 @@ func WithDir(dir string) APKDecoderOpt {
 }
 
 func NewAPKDecoder(name string, opts ...APKDecoderOpt) *APKDecoder {
-	ad := &APKDecoder{Name: name}
+	ad := &APKDecoder{Name: name, keytool: "keytool", apktool: "apktool"}
 
 	for _, opt := range opts {
 		opt(ad)
@@ -62,7 +67,7 @@ func (a *APKDecoder) decode(ctx context.Context) error {
 		return nil
 	} else if a.dir == "" {
 		var err error
-		a.dir, err = os.MkdirTemp("", fmt.Sprintf("%s-*", filepath.Base(a.Name)))
+		a.dir, err = os.MkdirTemp(filepath.Base(a.Name), "*")
 		if err != nil {
 			return err
 		}
@@ -74,14 +79,8 @@ func (a *APKDecoder) decode(ctx context.Context) error {
 		OutputDirectory: a.dir,
 	}
 
-	if a.apktool == "" {
-		if err := apktool.Decode(ctx, a.Name, opts); err != nil {
-			return err
-		}
-	} else {
-		if err := a.apktool.Decode(ctx, a.Name, opts); err != nil {
-			return err
-		}
+	if err := apktool.Command(a.apktool).Decode(ctx, a.Name, opts); err != nil {
+		return err
 	}
 
 	a.decoded = true
@@ -130,7 +129,8 @@ func (a *APKDecoder) SHA256CertFingerprints(ctx context.Context) (string, error)
 	var (
 		buf = new(bytes.Buffer)
 		//nolint:gosec
-		cmd = exec.CommandContext(ctx, "keytool", "-printcert", "-jarfile", a.Name)
+		// TODO: Refactor to pkg like apktool.
+		cmd = exec.CommandContext(ctx, a.keytool, "-printcert", "-jarfile", a.Name)
 	)
 
 	cmd.Stdout = buf
@@ -151,10 +151,6 @@ func (a *APKDecoder) SHA256CertFingerprints(ctx context.Context) (string, error)
 
 	return "", fmt.Errorf("sha256 cert fingerprints not found")
 }
-
-var (
-	_ momo.AppDecoder = &APKDecoder{}
-)
 
 func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 	if _, err := a.Manifest(ctx); err != nil {
@@ -240,9 +236,16 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 }
 
 func (a *APKDecoder) Close() error {
+	if a.decoded {
+		if err := os.RemoveAll(a.dir); err != nil {
+			return err
+		}
+	}
+
 	a.decoded = false
 	a.metadata = nil
 	a.manifest = nil
 	a.icons = nil
-	return errors.Join(os.RemoveAll(a.dir), os.Remove(a.Name))
+
+	return os.Remove(a.Name)
 }

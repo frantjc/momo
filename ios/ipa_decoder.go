@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/frantjc/momo"
 	xslice "github.com/frantjc/x/slice"
 	"howett.net/plist"
 )
@@ -81,10 +80,6 @@ func (i *IPADecoder) Info(_ context.Context) (*Info, error) {
 
 	return i.infoFromZipReader(zr)
 }
-
-var (
-	_ momo.AppDecoder = &IPADecoder{}
-)
 
 func (i *IPADecoder) Icons(_ context.Context) (io.Reader, error) {
 	zr, err := i.zipReader()

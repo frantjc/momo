@@ -1,0 +1,7 @@
+resources:
+- momo_v1alpha1_mobileapp.yaml
+- momo_v1alpha1_bucket.yaml
+- momo_v1alpha1_upload.yaml
+- momo_v1alpha1_apk.yaml
+- momo_v1alpha1_ipa.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

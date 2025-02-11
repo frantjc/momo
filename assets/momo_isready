@@ -2,4 +2,4 @@
 
 PATH=$PATH:`pwd`;
 export PATH;
-exec momo ping "$@"
+exec momo ping $@

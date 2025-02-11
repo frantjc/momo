@@ -1,0 +1,112 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.1
+  name: mobileapps.momo.frantj.cc
+spec:
+  group: momo.frantj.cc
+  names:
+    kind: MobileApp
+    listKind: MobileAppList
+    plural: mobileapps
+    singular: mobileapp
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: MobileApp is the Schema for the mobileapps API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MobileAppSpec defines the desired state of MobileApp.
+            properties:
+              bucket:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              images:
+                additionalProperties:
+                  properties:
+                    key:
+                      type: string
+                  required:
+                  - key
+                  type: object
+                type: object
+              key:
+                type: string
+              type:
+                enum:
+                - apk
+                - ipa
+                type: string
+            required:
+            - ""
+            - bucket
+            - key
+            type: object
+          status:
+            description: MobileAppStatus defines the observed state of MobileApp.
+            properties:
+              bundleIdentifier:
+                type: string
+              bundleName:
+                type: string
+              digest:
+                type: string
+              images:
+                additionalProperties:
+                  properties:
+                    key:
+                      type: string
+                  required:
+                  - key
+                  type: object
+                type: object
+              phase:
+                default: Pending
+                type: string
+              sha256CertFingerprints:
+                type: string
+              version:
+                type: string
+            required:
+            - phase
+            - version
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

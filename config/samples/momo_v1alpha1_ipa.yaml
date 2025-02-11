@@ -1,0 +1,9 @@
+apiVersion: momo.frantj.cc/v1alpha1
+kind: IPA
+metadata:
+  labels:
+    app.kubernetes.io/name: momo
+    app.kubernetes.io/managed-by: kustomize
+  name: ipa-sample
+spec:
+  # TODO(user): Add fields here
