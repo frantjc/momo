@@ -1,0 +1,43 @@
+services:
+  momo-ctrl:
+    build: .
+    command:
+      - ctrl
+      - -VV
+    volumes:
+      - ~/.kube:/root/.kube
+    environment:
+      AWS_ACCESS_KEY_ID: momominio
+      AWS_SECRET_ACCESS_KEY: momominio
+      AWS_REGION: us-east-1
+    depends_on:
+      - minio
+  momo-srv:
+    build: .
+    command:
+      - srv
+      - -VV
+    volumes:
+      - ~/.kube:/root/.kube
+    ports:
+      - 8080:8080
+    environment:
+      AWS_ACCESS_KEY_ID: momominio
+      AWS_SECRET_ACCESS_KEY: momominio
+      AWS_REGION: us-east-1
+    depends_on:
+      - minio
+  minio:
+    image: minio/minio
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /data/default
+        minio server /data --console-address ":9001"
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: momominio
+      MINIO_ROOT_PASSWORD: momominio

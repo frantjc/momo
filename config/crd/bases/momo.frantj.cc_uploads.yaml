@@ -58,7 +58,6 @@ spec:
               key:
                 type: string
             required:
-            - ""
             - bucket
             - key
             type: object

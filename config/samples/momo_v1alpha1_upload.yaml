@@ -1,9 +1,9 @@
+---
 apiVersion: momo.frantj.cc/v1alpha1
 kind: Upload
 metadata:
-  labels:
-    app.kubernetes.io/name: momo
-    app.kubernetes.io/managed-by: kustomize
   name: upload-sample
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  bucket:
+    name: default

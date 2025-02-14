@@ -5,6 +5,7 @@ import (
 	"time"
 
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
+	"github.com/frantjc/momo/internal/momoutil"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -39,11 +40,13 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	bucket.Status.Phase = "Pending"
+
 	defer func() {
 		_ = r.Client.Status().Update(ctx, bucket)
 	}()
 
-	if _, err := bucket.Open(ctx, r.Client); err != nil {
+	if _, err := momoutil.OpenBucket(ctx, r.Client, bucket); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}

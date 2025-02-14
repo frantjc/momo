@@ -1,18 +1,21 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // UploadSpec defines the desired state of Upload.
 type UploadSpec struct {
 	// +kubebuilder:validation:Required
-	SpecBucketKeyRef `json:",inline"`
+	Bucket corev1.LocalObjectReference `json:"bucket"`
+	// +kubebuilder:validation:Required
+	Key string `json:"key"`
 }
 
 // UploadStatus defines the observed state of Upload.
 type UploadStatus struct {
-	// +kubebuilder:default:=Pending
+	// +kubebuilder:default=Pending
 	Phase string `json:"phase,omitempty"`
 }
 

@@ -7,7 +7,6 @@ import (
 	"mime/multipart"
 )
 
-
 type TarOpts struct {
 	Mode int64
 }
@@ -20,7 +19,7 @@ func (t *TarOpts) Apply(opts *TarOpts) {
 	opts.Mode = t.Mode
 }
 
-func FileToTar(r io.Reader, name string, opts... TarOpt) io.Reader {
+func FileToTar(r io.Reader, name string, opts ...TarOpt) io.Reader {
 	o := &TarOpts{
 		Mode: 0777,
 	}
@@ -59,7 +58,7 @@ func FileToTar(r io.Reader, name string, opts... TarOpt) io.Reader {
 }
 
 // MultipartToTar converts a *multipart.Reader to a io.Reader.
-func MultipartToTar(mr *multipart.Reader, opts... TarOpt) io.Reader {
+func MultipartToTar(mr *multipart.Reader, opts ...TarOpt) io.Reader {
 	o := &TarOpts{
 		Mode: 0777,
 	}
@@ -67,7 +66,7 @@ func MultipartToTar(mr *multipart.Reader, opts... TarOpt) io.Reader {
 	for _, opt := range opts {
 		opt.Apply(o)
 	}
-	
+
 	pr, pw := io.Pipe()
 
 	go func() {

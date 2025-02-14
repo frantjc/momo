@@ -9,10 +9,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
+	"github.com/frantjc/momo/internal/momoutil"
 	"github.com/frantjc/momo/ios"
 	xslice "github.com/frantjc/x/slice"
 	"github.com/opencontainers/go-digest"
@@ -74,7 +76,7 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
-	cli, err := bucket.Open(ctx, r.Client)
+	cli, err := momoutil.OpenBucket(ctx, r.Client, bucket)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -85,13 +87,18 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	defer rc.Close()
 
-	tmp, err := os.CreateTemp("", fmt.Sprintf("*.%s", mobileApp.Spec.Type))
+	tmp, err := os.CreateTemp("", strings.ToLower(fmt.Sprintf("*.%s", mobileApp.Spec.Type)))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	defer os.Remove(tmp.Name())
+	defer tmp.Close()
 
 	if _, err := io.Copy(tmp, rc); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err = rc.Close(); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -108,20 +115,18 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
-	mobileApp.Status.Digest = dig.String()
+	mobileApp.Status.Phase = "Pending"
 
-	if mobileApp.Spec.Images != nil {
-		if mobileApp.Status.Images == nil {
-			mobileApp.Status.Images = map[string]momov1alpha1.MobileAppStatusImage{}
-		}
-
-		for name, image := range mobileApp.Spec.Images {
-			mobileApp.Status.Images[name] = momov1alpha1.MobileAppStatusImage(image)
-		}
+	var (
+		isAPK = momoutil.IsAPK(mobileApp)
+		isIPA = momoutil.IsIPA(mobileApp)
+	)
+	if isAPK && isIPA {
+		return ctrl.Result{}, fmt.Errorf(".spec.key has mismatched extension with .spec.type")
 	}
 
-	switch mobileApp.Spec.Type {
-	case momov1alpha1.MobileAppTypeAPK:
+	switch {
+	case isAPK:
 		apk := android.NewAPKDecoder(tmp.Name())
 		defer apk.Close()
 
@@ -139,12 +144,10 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		mobileApp.Status.Version = xslice.Coalesce(metadata.VersionInfo.VersionName, metadata.Version, fmt.Sprint(metadata.VersionInfo.VersionCode))
 
-		if mobileApp.Spec.Images == nil {
-			if err := r.uploadBestFitIcons(ctx, apk, cli, mobileApp); err != nil {
-				return ctrl.Result{}, err
-			}
+		if err := r.uploadIcons(ctx, apk, cli, mobileApp); err != nil {
+			return ctrl.Result{}, err
 		}
-	case momov1alpha1.MobileAppTypeIPA:
+	case isIPA:
 		ipa := ios.NewIPADecoder(tmp.Name())
 		defer ipa.Close()
 
@@ -157,12 +160,13 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		mobileApp.Status.BundleIdentifier = info.CFBundleIdentifier
 		mobileApp.Status.Version = xslice.Coalesce(info.CFBundleVersion, info.CFBundleShortVersionString)
 
-		if mobileApp.Spec.Images == nil {
-			if err := r.uploadBestFitIcons(ctx, ipa, cli, mobileApp); err != nil {
-				return ctrl.Result{}, err
-			}
+		if err := r.uploadIcons(ctx, ipa, cli, mobileApp); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
+
+	mobileApp.Status.Digest = dig.String()
+	mobileApp.Status.Phase = "Ready"
 
 	return ctrl.Result{RequeueAfter: time.Minute}, nil
 }
@@ -171,12 +175,7 @@ type iconAppDecoder interface {
 	Icons(context.Context) (io.Reader, error)
 }
 
-func (r *MobileAppReconciler) uploadBestFitIcons(ctx context.Context, iconAppDecoder iconAppDecoder, bucket *blob.Bucket, mobileApp *momov1alpha1.MobileApp) error {
-	var (
-		fullSizeImg image.Image
-		displayImg  image.Image
-	)
-
+func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder iconAppDecoder, bucket *blob.Bucket, mobileApp *momov1alpha1.MobileApp) error {
 	icons, err := iconAppDecoder.Icons(ctx)
 	if err != nil {
 		return err
@@ -184,7 +183,8 @@ func (r *MobileAppReconciler) uploadBestFitIcons(ctx context.Context, iconAppDec
 
 	tr := tar.NewReader(icons)
 	for {
-		if _, err := tr.Next(); errors.Is(err, io.EOF) {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return err
@@ -192,63 +192,37 @@ func (r *MobileAppReconciler) uploadBestFitIcons(ctx context.Context, iconAppDec
 
 		img, _, err := image.Decode(tr)
 		if err != nil {
-			return err
+			// TODO: Event.
+			continue
 		}
 
 		var (
-			bestFitFullSizeDimensions = 0
-			bestFitDisplayDimensions  = 0
-			imgDimensions             = img.Bounds().Dx()
-		)
-		if fullSizeImg != nil {
-			bestFitFullSizeDimensions = fullSizeImg.Bounds().Dx()
-		}
-
-		if displayImg != nil {
-			bestFitFullSizeDimensions = displayImg.Bounds().Dx()
-		}
-
-		if (bestFitFullSizeDimensions < 512 && imgDimensions > bestFitFullSizeDimensions) ||
-			(bestFitFullSizeDimensions > 512 && imgDimensions < bestFitFullSizeDimensions && imgDimensions >= 512) {
-			fullSizeImg = img
-		}
-
-		if (bestFitDisplayDimensions < 57 && imgDimensions > bestFitDisplayDimensions) ||
-			(bestFitDisplayDimensions > 57 && imgDimensions < bestFitDisplayDimensions && imgDimensions >= 57) {
-			displayImg = img
-		}
-	}
-
-	if fullSizeImg != nil {
-		key := filepath.Join(
-			filepath.Dir(mobileApp.Spec.Key),
-			mobileApp.Status.Digest,
-			"fullSize.png",
+			ext = filepath.Ext(hdr.Name)
+			key = filepath.Join(
+				filepath.Dir(mobileApp.Spec.Key),
+				strings.TrimSuffix(hdr.Name, ext)+".png",
+			)
 		)
 
-		if err = writeImage(ctx, fullSizeImg, bucket, key); err != nil {
+		if err = momoutil.UploadImage(ctx, bucket, key, img); err != nil {
 			return err
 		}
 
-		mobileApp.Status.Images[momov1alpha1.MobileAppImageTypeDisplay] = momov1alpha1.MobileAppStatusImage{
-			Key: key,
+		if mobileApp.Status.Images == nil {
+			mobileApp.Status.Images = []momov1alpha1.MobileAppStatusImage{}
 		}
-	}
 
-	if displayImg != nil {
-		key := filepath.Join(
-			filepath.Dir(mobileApp.Spec.Key),
-			mobileApp.Status.Digest,
-			"display.png",
+		var (
+			bounds = img.Bounds()
+			height = bounds.Dy()
+			width  = bounds.Dx()
 		)
 
-		if err = writeImage(ctx, fullSizeImg, bucket, key); err != nil {
-			return err
-		}
-
-		mobileApp.Status.Images[momov1alpha1.MobileAppImageTypeFullSize] = momov1alpha1.MobileAppStatusImage{
-			Key: key,
-		}
+		mobileApp.Status.Images = append(mobileApp.Status.Images, momov1alpha1.MobileAppStatusImage{
+			Key:    key,
+			Height: height,
+			Width:  width,
+		})
 	}
 
 	return nil

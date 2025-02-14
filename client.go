@@ -29,7 +29,7 @@ func (c *Client) init() error {
 	return nil
 }
 
-func (c *Client) UploadApp(ctx context.Context, tar io.Reader, namespace, bucket, app string) error {
+func (c *Client) UploadApp(ctx context.Context, tar io.Reader, namespace, bucketName, appName string) error {
 	if err := c.init(); err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (c *Client) UploadApp(ctx context.Context, tar io.Reader, namespace, bucket
 		_ = pw.CloseWithError(err)
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, bucket, "uploads", app).String(), pr)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, bucketName, "uploads", appName).String(), pr)
 	if err != nil {
 		return err
 	}

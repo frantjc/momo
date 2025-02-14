@@ -75,7 +75,9 @@ func OpenBucket(ctx context.Context, cli client.Client, bucket *momov1alpha1.Buc
 }
 
 func UploadImage(ctx context.Context, bucket *blob.Bucket, key string, img image.Image) error {
-	w, err := bucket.NewWriter(ctx, key, nil)
+	w, err := bucket.NewWriter(ctx, key, &blob.WriterOptions{
+		ContentType: ContentTypePNG,
+	})
 	if err != nil {
 		return err
 	}

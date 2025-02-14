@@ -2,15 +2,12 @@ package main
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"mime"
-	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,11 +15,10 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/frantjc/go-ingress"
+	_ "github.com/928799934/go-png-cgbi"
 	"github.com/frantjc/momo"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/internal/controller"
@@ -30,17 +26,16 @@ import (
 	xos "github.com/frantjc/x/os"
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
-	"gocloud.dev/blob"
+	_ "gocloud.dev/blob/fileblob"
+	_ "gocloud.dev/blob/s3blob"
 	"golang.org/x/sync/errgroup"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -103,6 +98,8 @@ func NewEntrypoint() *cobra.Command {
 	cmd.AddCommand(
 		NewControl(),
 		NewServe(),
+		NewPing(),
+		NewUpload(),
 	)
 
 	return cmd
@@ -267,8 +264,9 @@ func NewControl() *cobra.Command {
 
 func NewServe() *cobra.Command {
 	var (
-		addr     string
-		cmd = &cobra.Command{
+		addr   string
+		urlstr string
+		cmd    = &cobra.Command{
 			Use:           "srv",
 			SilenceErrors: true,
 			SilenceUsage:  true,
@@ -279,177 +277,27 @@ func NewServe() *cobra.Command {
 				}
 				defer l.Close()
 
-				zHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					_, _ = w.Write([]byte("ok\n"))
-				})
-				paths := []ingress.Path{
-					ingress.ExactPath("/readyz", zHandler),
-					ingress.ExactPath("/livez", zHandler),
-					ingress.ExactPath("/healthz", zHandler),
-					ingress.PrefixPath("/api/v1", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						var (
-							ctx    = r.Context()
-							pretty = momoutil.IsPretty(r)
-						)
-
-						spl := strings.Split(strings.ToLower(r.URL.Path), "/")
-
-						if len(spl) !=  6 || spl[4] != "uploads" {
-							http.NotFound(w, r)
-							return
-						}
-
-						var (
-							namespace = spl[2]
-							bucketName = spl[3]
-							appName = spl[5]
-						)
-
-						mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-						if err != nil {
-							_ = momoutil.RespondErrorJSON(w, err, pretty)
-							return
-						}
-
-						var (
-							boundary      = params["boundary"]
-							isMultipart = strings.EqualFold(mediaType, momoutil.ContentTypeMultiPart)
-							isTar       = strings.EqualFold(mediaType, momoutil.ContentTypeTar)
-							isApk       = strings.EqualFold(mediaType, momoutil.ContentTypeAPK)
-							isIpa       = strings.EqualFold(mediaType, momoutil.ContentTypeIPA)
-							isGzip      = strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip")
-						)
-
-						if isMultipart || isTar || isApk || isIpa {
-							if isMultipart && boundary == "" {
-								_ = momoutil.RespondErrorJSON(w,
-									momoutil.NewHTTPStatusCodeError(
-										fmt.Errorf("no boundary"),
-										http.StatusBadRequest,
-									),
-									pretty,
-								)
-								return
-							}
-
-							cfg, err := momoutil.GetConfigForRequest(r)
-							if err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-
-							cli, err := client.New(cfg, client.Options{
-								Scheme: scheme,
-							})
-							if err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-
-							var (
-								bucket = &momov1alpha1.Bucket{}
-							)
-
-							if err = cli.Get(ctx, client.ObjectKey{
-								Name: bucketName,
-								Namespace: namespace,
-							}, bucket); err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-
-							b, err := momoutil.OpenBucket(ctx, cli, bucket)
-							if err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-
-							var (
-								key    = ""
-								upload = &momov1alpha1.Upload{
-									ObjectMeta: metav1.ObjectMeta{
-										Name: appName,
-										Namespace: namespace,
-									},
-									Spec: momov1alpha1.UploadSpec{
-										SpecBucketKeyRef: momov1alpha1.SpecBucketKeyRef{
-											Key: key,
-											Bucket: corev1.LocalObjectReference{
-												Name: bucket.Name,
-											},
-										},
-									},
-								}
-							)
-
-							if err = cli.Create(ctx, upload); err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-
-							bw, err := b.NewWriter(ctx, key, &blob.WriterOptions{
-								ContentType:     momoutil.ContentTypeTar,
-								ContentEncoding: "gzip",
-							})
-							if err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-							if !isGzip {
-								defer bw.Close()
-							}
-				
-							var (
-								wc   io.WriteCloser = bw
-								body io.Reader      = r.Body
-							)
-							if !isGzip {
-								wc = gzip.NewWriter(bw)
-							}
-							defer wc.Close()
-				
-							switch {
-							case isMultipart:
-								body = momoutil.MultipartToTar(multipart.NewReader(r.Body, boundary), nil)
-							case isApk:
-								body = momoutil.FileToTar(r.Body, "app.apk", nil)
-							case isIpa:
-								body = momoutil.FileToTar(r.Body, "app.ipa", nil)
-							}
-				
-							if _, err = io.Copy(wc, body); err != nil {
-								_ = momoutil.RespondErrorJSON(w, err, pretty)
-								return
-							}
-						} else {
-							_ = momoutil.RespondErrorJSON(w,
-								momoutil.NewHTTPStatusCodeError(
-									fmt.Errorf("unsupported Content-Type %s", mediaType),
-									http.StatusUnsupportedMediaType,
-								),
-								pretty,
-							)
-						}
-				
-						if isMultipart {
-							if referer := r.Header.Get("Referer"); referer != "" {
-								http.Redirect(w, r, referer, http.StatusFound)
-								return
-							}
-						}
-				
-						w.WriteHeader(http.StatusCreated)
-						_ = momoutil.RespondJSON(w, map[string]string{"hello": "there"}, pretty)
-					})),
+				baseURL, err := url.Parse("http://" + addr)
+				if err != nil {
+					return err
 				}
 
-				srv := &http.Server{
-					Addr:              addr,
-					ReadHeaderTimeout: time.Second * 5,
-					Handler:           ingress.New(paths...),
+				if urlstr != "" {
+					var err error
+					baseURL, err = url.Parse(urlstr)
+					if err != nil {
+						return err
+					}
 				}
 
-				eg, ctx := errgroup.WithContext(cmd.Context())
+				var (
+					srv = &http.Server{
+						Addr:              addr,
+						ReadHeaderTimeout: time.Second * 5,
+						Handler:           momoutil.NewHandler(scheme, baseURL),
+					}
+					eg, ctx = errgroup.WithContext(cmd.Context())
+				)
 
 				eg.Go(func() error {
 					return srv.Serve(l)
@@ -472,6 +320,8 @@ func NewServe() *cobra.Command {
 
 	// Just allow this flag to be passed, it's parsed by ctrl.GetConfig().
 	cmd.Flags().String("kubeconfig", "", "Kube config.")
+	cmd.Flags().StringVar(&addr, "addr", ":8080", "listen address for momo")
+	cmd.Flags().StringVar(&urlstr, "url", "", "base URL for momo")
 
 	return cmd
 }
@@ -509,6 +359,8 @@ func NewPing() *cobra.Command {
 		}
 	)
 
+	cmd.Flags().StringVar(&addr, "addr", "", "listen address for momo")
+
 	return cmd
 }
 
@@ -517,16 +369,16 @@ func NewUpload() *cobra.Command {
 		addr string
 		cmd  = &cobra.Command{
 			Use:           "upload [flags] (namespace) (bucket) (name) (.ipa|.apk|.png...)",
-			Args:          cobra.MinimumNArgs(3),
+			Args:          cobra.MinimumNArgs(4),
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				var (
-					ctx    = cmd.Context()
-					namespace = args[0]
+					ctx        = cmd.Context()
+					namespace  = args[0]
 					bucketName = args[1]
-					appName   = args[2]
-					cli    = new(momo.Client)
+					appName    = args[2]
+					cli        = new(momo.Client)
 				)
 
 				var (
@@ -536,7 +388,7 @@ func NewUpload() *cobra.Command {
 
 				go func() {
 					err := func() error {
-						for _, arg := range args[2:] {
+						for _, arg := range args[3:] {
 							f, err := os.Open(arg)
 							if err != nil {
 								return err
@@ -576,6 +428,12 @@ func NewUpload() *cobra.Command {
 					}
 				}
 
+				cfg, err := ctrl.GetConfig()
+				if err == nil {
+					cli.HTTPClient = http.DefaultClient
+					cli.HTTPClient.Transport = &kubeAuthTransport{config: cfg}
+				}
+
 				if err := cli.UploadApp(ctx, pr, namespace, bucketName, appName); err != nil {
 					return err
 				}
@@ -585,5 +443,34 @@ func NewUpload() *cobra.Command {
 		}
 	)
 
+	cmd.Flags().StringVar(&addr, "addr", "", "listen address for momo")
+
 	return cmd
+}
+
+type kubeAuthTransport struct {
+	config       *rest.Config
+	roundTripper http.RoundTripper
+}
+
+func (t *kubeAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t == nil {
+		return http.DefaultTransport.RoundTrip(req)
+	}
+
+	if t.roundTripper == nil {
+		t.roundTripper = http.DefaultTransport
+	}
+
+	if t.config == nil {
+		return t.roundTripper.RoundTrip(req)
+	}
+
+	if t.config.BearerToken != "" {
+		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", t.config.BearerToken))
+	} else if t.config.Username != "" && t.config.Password != "" {
+		req.SetBasicAuth(t.config.Username, t.config.Password)
+	}
+
+	return t.roundTripper.RoundTrip(req)
 }

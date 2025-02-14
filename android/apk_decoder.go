@@ -67,7 +67,7 @@ func (a *APKDecoder) decode(ctx context.Context) error {
 		return nil
 	} else if a.dir == "" {
 		var err error
-		a.dir, err = os.MkdirTemp(filepath.Base(a.Name), "*")
+		a.dir, err = os.MkdirTemp(filepath.Dir(a.Name), "*")
 		if err != nil {
 			return err
 		}
@@ -161,6 +161,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 		iconType = "drawable"
 		iconName = "ic_launcher"
 	)
+
 	for _, attr := range a.manifest.Attrs {
 		if attr.Name.Space == "http://schemas.android.com/apk/res/android" && attr.Name.Local == "icon" {
 			iconType, iconName = path.Split(attr.Value)
@@ -175,7 +176,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 	)
 
 	go func() {
-		if err := filepath.WalkDir(a.dir, func(path string, d fs.DirEntry, err error) error {
+		err := filepath.WalkDir(a.dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			} else if d.IsDir() {
@@ -188,7 +189,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 			}
 
 			var (
-				base = filepath.Base(rel)
+				base = strings.ToLower(filepath.Base(rel))
 				ext  = filepath.Ext(base)
 			)
 
@@ -197,6 +198,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 				if err != nil {
 					return err
 				}
+				defer f.Close()
 
 				fi, err := d.Info()
 				if err != nil {
@@ -215,21 +217,13 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 				if _, err = io.Copy(tw, f); err != nil {
 					return err
 				}
-
-				if err = f.Close(); err != nil {
-					return err
-				}
 			}
 
 			return nil
-		}); err != nil {
-			_ = tw.Close()
-			_ = pw.CloseWithError(err)
-			return
-		}
+		})
 
 		_ = tw.Close()
-		_ = pw.Close()
+		_ = pw.CloseWithError(err)
 	}()
 
 	return pr, nil

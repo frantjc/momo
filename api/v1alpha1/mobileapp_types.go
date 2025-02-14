@@ -1,56 +1,47 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-type MobileAppSpecImage struct {
-	// +kubebuilder:validation:Required
-	Key string `json:"key,omitempty"`
-}
-
-type MobileAppImageType string
-
-const (
-	MobileAppImageTypeDisplay  = "display"
-	MobileAppImageTypeFullSize = "fullSize"
 )
 
 // MobileAppSpec defines the desired state of MobileApp.
 type MobileAppSpec struct {
 	// +kubebuilder:validation:Required
-	SpecBucketKeyRef `json:",inline"`
+	Bucket corev1.LocalObjectReference `json:"bucket"`
+	// +kubebuilder:validation:Required
+	Key string `json:"key"`
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Enum:={"apk", "ipa"}
+	// +kubebuilder:validation:Enum:={"APK", "IPA"}
 	Type MobileAppType `json:"type,omitempty"`
-	// +kubebuilder:validation:Optional
-	Images map[string]MobileAppSpecImage `json:"images,omitempty"`
 }
 
 type MobileAppType string
 
 const (
-	MobileAppTypeAPK MobileAppType = "apk"
-	MobileAppTypeIPA MobileAppType = "ipa"
+	MobileAppTypeAPK MobileAppType = "APK"
+	MobileAppTypeIPA MobileAppType = "IPA"
 )
 
 type MobileAppStatusImage struct {
 	// +kubebuilder:validation:Required
-	Key string `json:"key,omitempty"`
+	Key    string `json:"key,omitempty"`
+	Height int    `json:"height,omitemtpy"`
+	Width  int    `json:"width,omitempty"`
 }
 
 // MobileAppStatus defines the observed state of MobileApp.
 type MobileAppStatus struct {
-	// +kubebuilder:default:=Pending
+	// +kubebuilder:default=Pending
 	Phase string `json:"phase"`
 
 	Digest                 string `json:"digest,omitempty"`
-	Version                string `json:"version"`
+	Version                string `json:"version,omitempty"`
 	BundleName             string `json:"bundleName,omitempty"`
 	BundleIdentifier       string `json:"bundleIdentifier,omitempty"`
 	SHA256CertFingerprints string `json:"sha256CertFingerprints,omitempty"`
 
-	Images map[string]MobileAppStatusImage `json:"images,omitempty"`
+	Images []MobileAppStatusImage `json:"images,omitempty"`
 }
 
 // +kubebuilder:object:root=true

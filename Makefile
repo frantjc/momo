@@ -44,15 +44,31 @@ ifndef ignore-not-found
   ignore-not-found = false
 endif
 
+.PHONY: install
+install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
+
+.PHONY: uninstall
+uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	@mkdir -p $(LOCALBIN)
 
+KUBECTL ?= kubectl
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
+KUSTOMIZE_VERSION ?= v5.5.0
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
 GOLANGCI_LINT_VERSION ?= v1.63.4
+
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+$(KUSTOMIZE): $(LOCALBIN)
+	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN)

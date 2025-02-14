@@ -55,24 +55,14 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              images:
-                additionalProperties:
-                  properties:
-                    key:
-                      type: string
-                  required:
-                  - key
-                  type: object
-                type: object
               key:
                 type: string
               type:
                 enum:
-                - apk
-                - ipa
+                - APK
+                - IPA
                 type: string
             required:
-            - ""
             - bucket
             - key
             type: object
@@ -86,14 +76,14 @@ spec:
               digest:
                 type: string
               images:
-                additionalProperties:
+                items:
                   properties:
                     key:
                       type: string
                   required:
                   - key
                   type: object
-                type: object
+                type: array
               phase:
                 default: Pending
                 type: string
@@ -103,7 +93,6 @@ spec:
                 type: string
             required:
             - phase
-            - version
             type: object
         type: object
     served: true

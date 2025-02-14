@@ -5,8 +5,6 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-	"image"
-	"image/png"
 	"io"
 	"path/filepath"
 	"strings"
@@ -49,6 +47,8 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	upload.Status.Phase = "Pending"
+
 	defer func() {
 		_ = r.Client.Status().Update(ctx, upload)
 	}()
@@ -73,7 +73,7 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	cli, err := bucket.Open(ctx, r.Client)
+	cli, err := momoutil.OpenBucket(ctx, r.Client, bucket)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -92,7 +92,6 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	var (
 		tr         = tar.NewReader(zr)
 		mobileApps = momov1alpha1.MobileAppList{}
-		images     = map[string]momov1alpha1.MobileAppSpecImage{}
 	)
 
 	for {
@@ -116,8 +115,8 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				base,
 			)
 		)
-		switch {
-		case strings.EqualFold(ext, ".apk"):
+		switch ext {
+		case ".apk":
 			if err = cli.Upload(ctx, key, tr, &blob.WriterOptions{
 				ContentType: momoutil.ContentTypeAPK,
 			}); err != nil {
@@ -131,15 +130,13 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 						Name:      upload.Name + "-apk",
 					},
 					Spec: momov1alpha1.MobileAppSpec{
-						SpecBucketKeyRef: momov1alpha1.SpecBucketKeyRef{
-							Bucket: upload.Spec.Bucket,
-							Key:    key,
-						},
-						Type: momov1alpha1.MobileAppTypeAPK,
+						Bucket: upload.Spec.Bucket,
+						Key:    key,
+						Type:   momov1alpha1.MobileAppTypeAPK,
 					},
 				},
 			)
-		case strings.EqualFold(ext, ".ipa"):
+		case ".ipa":
 			if err = cli.Upload(ctx, key, tr, &blob.WriterOptions{
 				ContentType: "application/octet-stream",
 			}); err != nil {
@@ -153,48 +150,16 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 						Name:      upload.Name + "-ipa",
 					},
 					Spec: momov1alpha1.MobileAppSpec{
-						SpecBucketKeyRef: momov1alpha1.SpecBucketKeyRef{
-							Bucket: upload.Spec.Bucket,
-							Key:    key,
-						},
-						Type: momov1alpha1.MobileAppTypeIPA,
+						Bucket: upload.Spec.Bucket,
+						Key:    key,
+						Type:   momov1alpha1.MobileAppTypeIPA,
 					},
 				},
 			)
-		case strings.EqualFold(ext, ".png"):
-			switch {
-			case strings.Contains(base, "full"):
-				img, _, err := image.Decode(tr)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-
-				if err = writeImage(ctx, img, cli, key); err != nil {
-					return ctrl.Result{}, err
-				}
-
-				images[momov1alpha1.MobileAppImageTypeFullSize] = momov1alpha1.MobileAppSpecImage{
-					Key: key,
-				}
-			case strings.Contains(base, "display"):
-				img, _, err := image.Decode(tr)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-
-				if err = writeImage(ctx, img, cli, key); err != nil {
-					return ctrl.Result{}, err
-				}
-
-				images[momov1alpha1.MobileAppImageTypeDisplay] = momov1alpha1.MobileAppSpecImage{
-					Key: key,
-				}
-			}
 		}
 	}
 
 	for _, mobileApp := range mobileApps.Items {
-		mobileApp.Spec.Images = images
 		spec := mobileApp.Spec
 
 		if err = controllerutil.SetControllerReference(upload, &mobileApp, r.Scheme()); err != nil {
@@ -219,20 +184,6 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func writeImage(ctx context.Context, img image.Image, bucket *blob.Bucket, key string) error {
-	w, err := bucket.NewWriter(ctx, key, nil)
-	if err != nil {
-		return err
-	}
-	defer w.Close()
-
-	if err = png.Encode(w, img); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *UploadReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Client = mgr.GetClient()
@@ -240,5 +191,6 @@ func (r *UploadReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&momov1alpha1.Upload{}).
 		Named("upload").
+		Owns(&momov1alpha1.MobileApp{}).
 		Complete(r)
 }

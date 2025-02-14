@@ -1,9 +1,8 @@
+---
 apiVersion: momo.frantj.cc/v1alpha1
 kind: Bucket
 metadata:
-  labels:
-    app.kubernetes.io/name: momo
-    app.kubernetes.io/managed-by: kustomize
-  name: bucket-sample
+  name: default
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  url: s3://default?endpoint=http://minio:9000&disable_https=true&use_path_style=true

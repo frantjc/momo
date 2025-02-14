@@ -5,4 +5,6 @@ const (
 	ContentTypeIPA       = "application/octet-stream"
 	ContentTypeAPK       = "application/vnd.android.package-archive"
 	ContentTypeTar       = "application/tar"
+	ContentTypeJSON      = "application/json"
+	ContentTypePNG       = "image/png"
 )
