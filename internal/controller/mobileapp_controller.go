@@ -122,11 +122,10 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		isAPK = momoutil.IsAPK(mobileApp)
 		isIPA = momoutil.IsIPA(mobileApp)
 	)
-	if isAPK && isIPA {
-		return ctrl.Result{}, fmt.Errorf(".spec.key has mismatched extension with .spec.type")
-	}
 
 	switch {
+	case isAPK && isIPA:
+		return ctrl.Result{}, fmt.Errorf(".spec.key has mismatched extension with .spec.type")
 	case isAPK:
 		apk := android.NewAPKDecoder(tmp.Name())
 		defer apk.Close()
@@ -169,7 +168,7 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	mobileApp.Status.Digest = dig.String()
 	mobileApp.Status.Phase = "Ready"
 
-	return ctrl.Result{RequeueAfter: time.Minute}, nil
+	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }
 
 type iconAppDecoder interface {

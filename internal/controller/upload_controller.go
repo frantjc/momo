@@ -8,9 +8,11 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"time"
 
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/internal/momoutil"
+	xslice "github.com/frantjc/x/slice"
 	"gocloud.dev/blob"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -159,7 +161,7 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	for _, mobileApp := range mobileApps.Items {
+	for i, mobileApp := range mobileApps.Items {
 		spec := mobileApp.Spec
 
 		if err = controllerutil.SetControllerReference(upload, &mobileApp, r.Scheme()); err != nil {
@@ -177,11 +179,17 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		mobileApps.Items[i] = mobileApp
 	}
 
-	upload.Status.Phase = "Ready"
+	if xslice.Every(mobileApps.Items, func(mobileApp momov1alpha1.MobileApp, _ int) bool {
+		return mobileApp.Status.Phase == "Ready"
+	}) {
+		upload.Status.Phase = "Ready"
+	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

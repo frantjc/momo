@@ -56,7 +56,7 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	bucket.Status.Phase = "Ready"
 
-	return ctrl.Result{RequeueAfter: time.Minute}, nil
+	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
