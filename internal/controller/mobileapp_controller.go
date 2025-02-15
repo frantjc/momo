@@ -176,11 +176,6 @@ type iconAppDecoder interface {
 	Icons(context.Context) (io.Reader, error)
 }
 
-const (
-	displayPx  = 57
-	fullSizePx = 512
-)
-
 func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder iconAppDecoder, bucket *blob.Bucket, mobileApp *momov1alpha1.MobileApp) error {
 	icons, err := iconAppDecoder.Icons(ctx)
 	if err != nil {
@@ -205,22 +200,24 @@ func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder ic
 		}
 
 		var (
-			ext = filepath.Ext(hdr.Name)
-			key = filepath.Join(
+			bounds = img.Bounds()
+			height = bounds.Dy()
+			width  = bounds.Dx()
+			ext    = filepath.Ext(hdr.Name)
+			key    = filepath.Join(
 				filepath.Dir(mobileApp.Spec.Key),
-				strings.TrimSuffix(hdr.Name, ext)+".png",
+				fmt.Sprintf("%s-%dx%d%s",
+					strings.ToLower(strings.TrimSuffix(hdr.Name, ext)),
+					height,
+					width,
+					".png",
+				),
 			)
 		)
 
 		if err = momoutil.UploadImage(ctx, bucket, key, img); err != nil {
 			return err
 		}
-
-		var (
-			bounds = img.Bounds()
-			height = bounds.Dy()
-			width  = bounds.Dx()
-		)
 
 		mobileApp.Status.Images = append(mobileApp.Status.Images, momov1alpha1.MobileAppStatusImage{
 			Key:    key,
@@ -238,12 +235,12 @@ func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder ic
 	)
 	for i, image := range mobileApp.Status.Images {
 		if image.Height == image.Width {
-			if mrgn := int(math.Abs(float64(fullSizePx - image.Width))); mrgn < fullSizeMrgn {
+			if mrgn := int(math.Abs(float64(momoutil.ImageFullSizePx - image.Width))); mrgn < fullSizeMrgn {
 				fullSizeIdx = i
 				fullSizeMrgn = mrgn
 			}
 
-			if mrgn := int(math.Abs(float64(displayPx - image.Width))); mrgn < displayMrgn {
+			if mrgn := int(math.Abs(float64(momoutil.ImageDisplayPx - image.Width))); mrgn < displayMrgn {
 				displayIdx = i
 				displayMrgn = mrgn
 			}

@@ -7,4 +7,6 @@ const (
 	ContentTypeTar       = "application/tar"
 	ContentTypeJSON      = "application/json"
 	ContentTypePNG       = "image/png"
+	ContentTypeJPEG      = "image/jpeg"
+	ContentTypePlist     = "application/xml"
 )

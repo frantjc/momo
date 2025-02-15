@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -102,7 +104,7 @@ func handleUpload(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Re
 				)
 			}
 
-			cli, err := newClientForReq(r, scheme)
+			cli, err := newClient(r, scheme)
 			if err != nil {
 				return err
 			}
@@ -198,7 +200,7 @@ func handleUpload(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Re
 
 func handleManifests(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		cli, err := newClientForReq(nil, scheme)
+		cli, err := newClient(nil, scheme)
 		if err != nil {
 			return err
 		}
@@ -236,6 +238,11 @@ func IsIPA(mobileApp *momov1alpha1.MobileApp) bool {
 	return mobileApp.Spec.Type == momov1alpha1.MobileAppTypeIPA || strings.EqualFold(filepath.Ext(mobileApp.Spec.Key), ".ipa")
 }
 
+const (
+	ImageDisplayPx  = 57
+	ImageFullSizePx = 512
+)
+
 func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		var (
@@ -248,7 +255,7 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 			ext        = filepath.Ext(file)
 		)
 
-		cli, err := newClientForReq(nil, scheme)
+		cli, err := newClient(nil, scheme)
 		if err != nil {
 			return err
 		}
@@ -282,7 +289,7 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 				return fmt.Errorf("app is not an .ipa")
 			}
 			contentType = ContentTypeIPA
-		case ".png":
+		case ".png", ".jpg", ".jpeg":
 			var (
 				findAny = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
 					return true
@@ -290,13 +297,13 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 				find = findAny
 			)
 
-			if xslice.Some([]string{"57", "display"}, func(part string, _ int) bool {
+			if xslice.Some([]string{fmt.Sprint(ImageDisplayPx), "display"}, func(part string, _ int) bool {
 				return strings.Contains(file, part)
 			}) {
 				find = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
 					return image.Display
 				}
-			} else if xslice.Some([]string{"512", "full"}, func(part string, _ int) bool {
+			} else if xslice.Some([]string{fmt.Sprint(ImageFullSizePx), "full"}, func(part string, _ int) bool {
 				return strings.Contains(file, part)
 			}) {
 				find = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
@@ -304,19 +311,23 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 				}
 			}
 
-			contentType = ContentTypePNG
+			switch ext {
+			case ".jpg", ".jpeg":
+				contentType = ContentTypeJPEG
+			case ".png":
+				contentType = ContentTypePNG
+			}
+
 			key = xslice.
 				Coalesce(
 					xslice.Find(mobileApp.Status.Images, find),
-					xslice.Find(mobileApp.Status.Images, find),
+					xslice.Find(mobileApp.Status.Images, findAny),
 				).
 				Key
 		default:
-			if strings.EqualFold(file, "manifest.plist") {
+			if file == "manifest.plist" {
 				if mobileApp.Status.BundleIdentifier == "" || mobileApp.Status.BundleName == "" || mobileApp.Status.Version == "" {
-					return newHTTPStatusCodeError(fmt.Errorf("not found"), http.StatusPreconditionFailed)
-				} else if exists, _ := b.Exists(ctx, mobileApp.Spec.Key); !exists {
-					return newHTTPStatusCodeError(fmt.Errorf("not found"), http.StatusNotFound)
+					return newHTTPStatusCodeError(fmt.Errorf("mobileapp is in phase %s", mobileApp.Status.Phase), http.StatusPreconditionFailed)
 				}
 
 				enc := plist.NewEncoder(w)
@@ -324,7 +335,7 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 					enc.Indent("  ")
 				}
 
-				w.Header().Set("Content-Type", "application/xml")
+				w.Header().Set("Content-Type", ContentTypePlist)
 
 				if err = enc.Encode(&ios.Manifest{
 					Items: []ios.ManifestItem{
@@ -359,12 +370,25 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 				return nil
 			}
 		}
+
 		rc, err := b.NewReader(ctx, key, nil)
 		if gcerrors.Code(err) == gcerrors.NotFound || rc == nil {
-			if ext == ".png" {
-				w.Header().Set("Content-Type", contentType)
+			w.Header().Set("Content-Type", contentType)
 
+			switch ext {
+			case ".png":
 				if _, err := io.Copy(w, bytes.NewReader(questionMarkPNG)); err != nil {
+					return err
+				}
+
+				return nil
+			case ".jpg", ".jpeg":
+				img, _, err := image.Decode(bytes.NewReader(questionMarkPNG))
+				if err != nil {
+					return err
+				}
+
+				if err := jpeg.Encode(w, img, &jpeg.Options{Quality: 100}); err != nil {
 					return err
 				}
 
@@ -376,6 +400,22 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 			return err
 		}
 		defer rc.Close()
+
+		switch ext {
+		case ".jpg", ".jpeg":
+			img, _, err := image.Decode(rc)
+			if err != nil {
+				return err
+			}
+
+			w.Header().Set("Content-Type", contentType)
+
+			if err := jpeg.Encode(w, img, &jpeg.Options{Quality: 100}); err != nil {
+				return err
+			}
+
+			return nil
+		}
 
 		w.Header().Set("Content-Type", contentType)
 
@@ -454,7 +494,7 @@ func wantsPretty(r *http.Request) bool {
 	return pretty
 }
 
-func newClientForReq(r *http.Request, scheme *runtime.Scheme) (client.Client, error) {
+func newClient(r *http.Request, scheme *runtime.Scheme) (client.Client, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return nil, err
