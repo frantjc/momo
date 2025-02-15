@@ -78,10 +78,20 @@ spec:
               images:
                 items:
                   properties:
+                    display:
+                      type: boolean
+                    fullSize:
+                      type: boolean
+                    height:
+                      type: integer
                     key:
                       type: string
+                    width:
+                      type: integer
                   required:
+                  - height
                   - key
+                  - width
                   type: object
                 type: array
               phase:

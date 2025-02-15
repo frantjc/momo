@@ -138,7 +138,7 @@ func (r *UploadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			)
 		case ".ipa":
 			if err = cli.Upload(ctx, key, tr, &blob.WriterOptions{
-				ContentType: "application/octet-stream",
+				ContentType: momoutil.ContentTypeIPA,
 			}); err != nil {
 				return ctrl.Result{}, err
 			}

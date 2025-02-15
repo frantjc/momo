@@ -17,6 +17,7 @@ import (
 
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/ios"
+	xslice "github.com/frantjc/x/slice"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"gocloud.dev/blob"
@@ -34,7 +35,7 @@ const (
 	namespaceParam  = `{namespace:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
 	bucketNameParam = `{bucket:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
 	appNameParam    = `{app:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
-	fileNameParam   = `{file:[a-zA-Z0-9]+\.[a-zA-Z]+}`
+	fileNameParam   = `{file}`
 )
 
 func NewHandler(scheme *runtime.Scheme, baseURL *url.URL) http.Handler {
@@ -240,11 +241,11 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 		var (
 			ctx        = r.Context()
 			mobileApp  = &momov1alpha1.MobileApp{}
-			namespace  = chi.URLParam(r, "namespace")
-			bucketName = chi.URLParam(r, "bucket")
-			appName    = chi.URLParam(r, "app")
-			file       = chi.URLParam(r, "file")
-			ext        = strings.ToLower(filepath.Ext(file))
+			namespace  = strings.ToLower(chi.URLParam(r, "namespace"))
+			bucketName = strings.ToLower(chi.URLParam(r, "bucket"))
+			appName    = strings.ToLower(chi.URLParam(r, "app"))
+			file       = strings.ToLower(chi.URLParam(r, "file"))
+			ext        = filepath.Ext(file)
 		)
 
 		cli, err := newClientForReq(nil, scheme)
@@ -276,17 +277,40 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 				return fmt.Errorf("app is not an .apk")
 			}
 			contentType = ContentTypeAPK
-		case ext, ".ipa":
+		case ".ipa":
 			if !IsIPA(mobileApp) {
 				return fmt.Errorf("app is not an .ipa")
 			}
 			contentType = ContentTypeIPA
 		case ".png":
-			for _, image := range mobileApp.Status.Images {
-				key = image.Key
-				break
+			var (
+				findAny = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
+					return true
+				}
+				find = findAny
+			)
+
+			if xslice.Some([]string{"57", "display"}, func(part string, _ int) bool {
+				return strings.Contains(file, part)
+			}) {
+				find = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
+					return image.Display
+				}
+			} else if xslice.Some([]string{"512", "full"}, func(part string, _ int) bool {
+				return strings.Contains(file, part)
+			}) {
+				find = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
+					return image.FullSize
+				}
 			}
+
 			contentType = ContentTypePNG
+			key = xslice.
+				Coalesce(
+					xslice.Find(mobileApp.Status.Images, find),
+					xslice.Find(mobileApp.Status.Images, find),
+				).
+				Key
 		default:
 			if strings.EqualFold(file, "manifest.plist") {
 				if mobileApp.Status.BundleIdentifier == "" || mobileApp.Status.BundleName == "" || mobileApp.Status.Version == "" {
@@ -312,11 +336,11 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 								},
 								{
 									Kind: "full-size-image",
-									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "full-size-image.png").String(),
+									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "full-size.png").String(),
 								},
 								{
 									Kind: "display-image",
-									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "display-image.png").String(),
+									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "display.png").String(),
 								},
 							},
 							Metadata: &ios.ManifestItemMetadata{

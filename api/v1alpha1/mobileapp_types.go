@@ -25,9 +25,15 @@ const (
 
 type MobileAppStatusImage struct {
 	// +kubebuilder:validation:Required
-	Key    string `json:"key,omitempty"`
-	Height int    `json:"height,omitemtpy"`
-	Width  int    `json:"width,omitempty"`
+	Key string `json:"key,omitempty"`
+	// +kubebuilder:validation:Required
+	Height int `json:"height,omitempty"`
+	// +kubebuilder:validation:Required
+	Width int `json:"width,omitempty"`
+	// +kubebuilder:validation:Optional
+	Display bool `json:"display,omitempty"`
+	// +kubebuilder:validation:Optional
+	FullSize bool `json:"fullSize,omitempty"`
 }
 
 // MobileAppStatus defines the observed state of MobileApp.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,11 +176,18 @@ type iconAppDecoder interface {
 	Icons(context.Context) (io.Reader, error)
 }
 
+const (
+	displayPx  = 57
+	fullSizePx = 512
+)
+
 func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder iconAppDecoder, bucket *blob.Bucket, mobileApp *momov1alpha1.MobileApp) error {
 	icons, err := iconAppDecoder.Icons(ctx)
 	if err != nil {
 		return err
 	}
+
+	mobileApp.Status.Images = []momov1alpha1.MobileAppStatusImage{}
 
 	tr := tar.NewReader(icons)
 	for {
@@ -208,10 +216,6 @@ func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder ic
 			return err
 		}
 
-		if mobileApp.Status.Images == nil {
-			mobileApp.Status.Images = []momov1alpha1.MobileAppStatusImage{}
-		}
-
 		var (
 			bounds = img.Bounds()
 			height = bounds.Dy()
@@ -223,6 +227,35 @@ func (r *MobileAppReconciler) uploadIcons(ctx context.Context, iconAppDecoder ic
 			Height: height,
 			Width:  width,
 		})
+	}
+
+	var (
+		lenImages    = len(mobileApp.Status.Images)
+		fullSizeMrgn = math.MaxInt
+		fullSizeIdx  = lenImages - 1
+		displayMrgn  = math.MaxInt
+		displayIdx   = lenImages - 1
+	)
+	for i, image := range mobileApp.Status.Images {
+		if image.Height == image.Width {
+			if mrgn := int(math.Abs(float64(fullSizePx - image.Width))); mrgn < fullSizeMrgn {
+				fullSizeIdx = i
+				fullSizeMrgn = mrgn
+			}
+
+			if mrgn := int(math.Abs(float64(displayPx - image.Width))); mrgn < displayMrgn {
+				displayIdx = i
+				displayMrgn = mrgn
+			}
+		}
+	}
+
+	if fullSizeIdx >= 0 {
+		mobileApp.Status.Images[fullSizeIdx].FullSize = true
+	}
+
+	if displayIdx >= 0 {
+		mobileApp.Status.Images[displayIdx].Display = true
 	}
 
 	return nil
