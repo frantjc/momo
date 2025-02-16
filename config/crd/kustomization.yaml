@@ -4,7 +4,8 @@
 resources:
 - bases/momo.frantj.cc_mobileapps.yaml
 - bases/momo.frantj.cc_buckets.yaml
-- bases/momo.frantj.cc_uploads.yaml
+- bases/momo.frantj.cc_apks.yaml
+- bases/momo.frantj.cc_ipas.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

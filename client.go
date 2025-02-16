@@ -29,27 +29,35 @@ func (c *Client) init() error {
 	return nil
 }
 
-func (c *Client) UploadApp(ctx context.Context, tar io.Reader, namespace, bucketName, appName string) error {
+func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType, namespace, bucketName, appName string) error {
 	if err := c.init(); err != nil {
 		return err
 	}
 
-	pr, pw := io.Pipe()
+	doGzip := contentType == momoutil.ContentTypeTar
 
-	go func() {
-		zw := gzip.NewWriter(pw)
-		_, err := io.Copy(zw, tar)
-		_ = zw.Close()
-		_ = pw.CloseWithError(err)
-	}()
+	if doGzip {
+		pr, pw := io.Pipe()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, bucketName, "uploads", appName).String(), pr)
+		go func() {
+			zw := gzip.NewWriter(pw)
+			_, err := io.Copy(zw, body)
+			_ = zw.Close()
+			_ = pw.CloseWithError(err)
+		}()
+
+		body = pr
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, bucketName, "uploads", appName).String(), body)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Content-Type", momoutil.ContentTypeTar)
-	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Content-Type", contentType)
+	if doGzip {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
 
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -60,8 +68,8 @@ func (c *Client) UploadApp(ctx context.Context, tar io.Reader, namespace, bucket
 	if res.StatusCode != http.StatusCreated {
 		body := map[string]string{}
 		if err = json.NewDecoder(res.Body).Decode(&body); err == nil {
-			if body["error"] != "" {
-				return fmt.Errorf("http status code %d: %s", res.StatusCode, body["error"])
+			if msg := body["error"]; msg != "" {
+				return fmt.Errorf("http status code %d: %s", res.StatusCode, msg)
 			}
 		}
 

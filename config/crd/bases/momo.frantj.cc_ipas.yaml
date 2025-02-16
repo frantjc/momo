@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.1
-  name: uploads.momo.frantj.cc
+  name: ipas.momo.frantj.cc
 spec:
   group: momo.frantj.cc
   names:
-    kind: Upload
-    listKind: UploadList
-    plural: uploads
-    singular: upload
+    kind: IPA
+    listKind: IPAList
+    plural: ipas
+    singular: ipa
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Upload is the Schema for the uploads API.
+        description: IPA is the Schema for the IPAs API.
         properties:
           apiVersion:
             description: |-
@@ -37,7 +37,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: UploadSpec defines the desired state of Upload.
+            description: IPASpec defines the desired state of IPA.
             properties:
               bucket:
                 description: |-
@@ -62,11 +62,37 @@ spec:
             - key
             type: object
           status:
-            description: UploadStatus defines the observed state of Upload.
+            description: IPAStatus defines the observed state of IPA.
             properties:
+              bundleIdentifier:
+                type: string
+              bundleName:
+                type: string
+              digest:
+                type: string
+              icons:
+                items:
+                  properties:
+                    display:
+                      type: boolean
+                    fullSize:
+                      type: boolean
+                    key:
+                      type: string
+                    size:
+                      type: integer
+                  required:
+                  - key
+                  - size
+                  type: object
+                type: array
               phase:
                 default: Pending
                 type: string
+              version:
+                type: string
+            required:
+            - phase
             type: object
         type: object
     served: true

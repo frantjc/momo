@@ -32,7 +32,16 @@ resources:
   controller: true
   domain: frantj.cc
   group: momo
-  kind: Upload
+  kind: APK
+  path: github.com/frantjc/momo/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: frantj.cc
+  group: momo
+  kind: IPA
   path: github.com/frantjc/momo/api/v1alpha1
   version: v1alpha1
 version: "3"

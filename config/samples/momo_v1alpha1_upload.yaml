@@ -1,9 +1,0 @@
----
-apiVersion: momo.frantj.cc/v1alpha1
-kind: Upload
-metadata:
-  name: upload-sample
-  namespace: default
-spec:
-  bucket:
-    name: default

@@ -6,10 +6,13 @@ import (
 
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/internal/momoutil"
+	xslice "github.com/frantjc/x/slice"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -65,6 +68,37 @@ func (r *BucketReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&momov1alpha1.Bucket{}).
+		Watches(&corev1.Secret{}, r.EventHandler(func(bucket momov1alpha1.Bucket, obj client.Object) bool {
+			return bucket.Namespace == obj.GetNamespace() &&
+				bucket.Spec.URLFrom != nil &&
+				bucket.Spec.URLFrom.SecretKeyRef != nil &&
+				bucket.Spec.URLFrom.SecretKeyRef.Name == obj.GetName()
+		})).
+		Watches(&corev1.ConfigMap{}, r.EventHandler(func(bucket momov1alpha1.Bucket, obj client.Object) bool {
+			return bucket.Namespace == obj.GetNamespace() &&
+				bucket.Spec.URLFrom != nil &&
+				bucket.Spec.URLFrom.ConfigMapKeyRef != nil &&
+				bucket.Spec.URLFrom.ConfigMapKeyRef.Name == obj.GetName()
+		})).
 		Named("bucket").
 		Complete(r)
+}
+
+func (r *BucketReconciler) EventHandler(filter func(bucket momov1alpha1.Bucket, obj client.Object) bool) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
+		buckets := &momov1alpha1.BucketList{}
+
+		if err := r.Client.List(ctx, buckets, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+			return []ctrl.Request{}
+		}
+
+		return xslice.Map(
+			xslice.Filter(buckets.Items, func(bucket momov1alpha1.Bucket, _ int) bool {
+				return filter(bucket, obj)
+			}),
+			func(bucket momov1alpha1.Bucket, _ int) ctrl.Request {
+				return ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&bucket)}
+			},
+		)
+	})
 }

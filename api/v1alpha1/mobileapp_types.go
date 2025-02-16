@@ -3,57 +3,53 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // MobileAppSpec defines the desired state of MobileApp.
 type MobileAppSpec struct {
 	// +kubebuilder:validation:Required
-	Bucket corev1.LocalObjectReference `json:"bucket"`
-	// +kubebuilder:validation:Required
-	Key string `json:"key"`
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Enum:={"APK", "IPA"}
-	Type MobileAppType `json:"type,omitempty"`
-}
-
-type MobileAppType string
-
-const (
-	MobileAppTypeAPK MobileAppType = "APK"
-	MobileAppTypeIPA MobileAppType = "IPA"
-)
-
-type MobileAppStatusImage struct {
-	// +kubebuilder:validation:Required
-	Key string `json:"key,omitempty"`
-	// +kubebuilder:validation:Required
-	Height int `json:"height,omitempty"`
-	// +kubebuilder:validation:Required
-	Width int `json:"width,omitempty"`
-	// +kubebuilder:validation:Optional
-	Display bool `json:"display,omitempty"`
-	// +kubebuilder:validation:Optional
-	FullSize bool `json:"fullSize,omitempty"`
+	Selector labels.Set `json:"selector"`
 }
 
 // MobileAppStatus defines the observed state of MobileApp.
 type MobileAppStatus struct {
 	// +kubebuilder:default=Pending
 	Phase string `json:"phase"`
+	// +kubebuilder:validation:Optional
+	APKs []MobileAppStatusApp `json:"apks,omitempty"`
+	// +kubebuilder:validation:Optional
+	AssetLinkTargets []MobileAppStatusTarget `json:"assetLinkTargets,omitempty"`
+	// +kubebuilder:validation:Optional
+	IPAs []MobileAppStatusApp `json:"ipas,omitempty"`
+	// +kubebuilder:validation:Optional
+	AppleAppSiteAssociationAppIDs []string `json:"appleAppSiteAssociationAppIDs,omitempty"`
+}
 
-	Digest                 string `json:"digest,omitempty"`
-	Version                string `json:"version,omitempty"`
-	BundleName             string `json:"bundleName,omitempty"`
-	BundleIdentifier       string `json:"bundleIdentifier,omitempty"`
-	SHA256CertFingerprints string `json:"sha256CertFingerprints,omitempty"`
+type MobileAppStatusTarget struct {
+	// +kubebuilder:validation:Required
+	Package string `json:"package"`
+	// +kubebuilder:validation:Required
+	SHA256CertFingerprints []string `json:"sha256CertFingerPrints"`
+}
 
-	Images []MobileAppStatusImage `json:"images,omitempty"`
+type MobileAppStatusApp struct {
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+	// +kubebuilder:validation:Required
+	Bucket corev1.LocalObjectReference `json:"bucket"`
+	// +kubebuilder:validation:Required
+	Key string `json:"key"`
+	// +kubebuilder:validation:Optional
+	Version string `json:"version,omitempty"`
+	// +kubebuilder:validation:Optional
+	Latest bool `json:"latest,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// MobileApp is the Schema for the mobileapps API.
+// MobileApp is the Schema for the MobileApps API.
 type MobileApp struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

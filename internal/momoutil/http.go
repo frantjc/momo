@@ -2,21 +2,19 @@ package momoutil
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"io"
-	"mime"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/ios"
 	xslice "github.com/frantjc/x/slice"
@@ -31,16 +29,22 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
-	namespaceParam  = `{namespace:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
-	bucketNameParam = `{bucket:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
-	appNameParam    = `{app:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
-	fileNameParam   = `{file}`
+	paramNamespace = `{namespace:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
+	paramBucket    = `{bucket:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
+	paramApp       = `{app:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
+	paramVersion   = `{version}`
+	paramFile      = `{file}`
 )
 
-func NewHandler(scheme *runtime.Scheme, baseURL *url.URL) http.Handler {
+const (
+	labelApp = "momo.frantj.cc/app"
+)
+
+func NewHandler(scheme *runtime.Scheme) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RealIP)
@@ -53,19 +57,39 @@ func NewHandler(scheme *runtime.Scheme, baseURL *url.URL) http.Handler {
 	r.Get("/livez", z)
 	r.Get("/healthz", z)
 
+	r.Get(
+		"/.well-known/assetlinks.json",
+		handleErr(handleAssetLinks(scheme)),
+	)
+
+	r.Get(
+		"/.well-known/apple-app-site-association",
+		handleErr(handleAppleAppSiteAssociation(scheme)),
+	)
+
 	r.Post(
-		fmt.Sprintf("/api/v1/%s/%s/uploads/%s", namespaceParam, bucketNameParam, appNameParam),
+		fmt.Sprintf("/api/v1/%s/%s/uploads/%s", paramNamespace, paramBucket, paramApp),
 		handleErr(handleUpload(scheme)),
 	)
 
 	r.Get(
-		fmt.Sprintf("/api/v1/%s/%s/manifests/%s", namespaceParam, bucketNameParam, appNameParam),
-		handleErr(handleManifests(scheme, baseURL)),
+		fmt.Sprintf("/api/v1/%s/%s/manifests/%s", paramNamespace, paramBucket, paramApp),
+		handleErr(handleManifests(scheme)),
 	)
 
 	r.Get(
-		fmt.Sprintf("/api/v1/%s/%s/files/%s/%s", namespaceParam, bucketNameParam, appNameParam, fileNameParam),
-		handleErr(handleFiles(scheme, baseURL)),
+		fmt.Sprintf("/api/v1/%s/%s/manifests/%s/%s", paramNamespace, paramBucket, paramVersion, paramApp),
+		handleErr(handleManifests(scheme)),
+	)
+
+	r.Get(
+		fmt.Sprintf("/api/v1/%s/%s/files/%s/%s", paramNamespace, paramBucket, paramApp, paramFile),
+		handleErr(handleFiles(scheme)),
+	)
+
+	r.Get(
+		fmt.Sprintf("/api/v1/%s/%s/files/%s/%s/%s", paramNamespace, paramBucket, paramApp, paramVersion, paramFile),
+		handleErr(handleFiles(scheme)),
 	)
 
 	r.NotFound(http.NotFound)
@@ -83,122 +107,129 @@ func handleErr(handler func(w http.ResponseWriter, r *http.Request) error) http.
 
 func handleUpload(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		cli, err := newClient(r, scheme)
 		if err != nil {
 			return err
 		}
 
+		rc, mediaType, err := ReqToApp(r)
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+
 		var (
-			boundary    = params["boundary"]
-			isMultipart = strings.EqualFold(mediaType, ContentTypeMultiPart)
-			isTar       = strings.EqualFold(mediaType, ContentTypeTar)
-			isApk       = strings.EqualFold(mediaType, ContentTypeAPK)
-			isIpa       = strings.EqualFold(mediaType, ContentTypeIPA)
+			bucket     = &momov1alpha1.Bucket{}
+			ctx        = r.Context()
+			namespace  = chi.URLParam(r, "namespace")
+			bucketName = chi.URLParam(r, "bucket")
+			appName    = chi.URLParam(r, "app")
 		)
 
-		if isMultipart || isTar || isApk || isIpa {
-			if isMultipart && boundary == "" {
-				return newHTTPStatusCodeError(
-					fmt.Errorf("missing boundary"),
-					http.StatusBadRequest,
-				)
-			}
-
-			cli, err := newClient(r, scheme)
-			if err != nil {
-				return err
-			}
-
-			var (
-				bucket     = &momov1alpha1.Bucket{}
-				ctx        = r.Context()
-				namespace  = chi.URLParam(r, "namespace")
-				bucketName = chi.URLParam(r, "bucket")
-				appName    = chi.URLParam(r, "app")
-			)
-
-			if err = cli.Get(ctx, client.ObjectKey{Name: bucketName, Namespace: namespace}, bucket); err != nil {
-				return err
-			}
-
-			b, err := OpenBucket(ctx, cli, bucket)
-			if err != nil {
-				return err
-			}
-
-			var (
-				key    = fmt.Sprintf("%s.tar.gz", appName)
-				upload = &momov1alpha1.Upload{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: fmt.Sprintf("%s-", appName),
-						Namespace:    namespace,
-					},
-					Spec: momov1alpha1.UploadSpec{
-						Key: key,
-						Bucket: corev1.LocalObjectReference{
-							Name: bucket.Name,
-						},
-					},
-				}
-			)
-
-			if err = cli.Create(ctx, upload); err != nil {
-				return err
-			}
-
-			bw, err := b.NewWriter(ctx, key, &blob.WriterOptions{
-				ContentType:     ContentTypeTar,
-				ContentEncoding: "gzip",
-			})
-			if err != nil {
-				return err
-			}
-
-			isGzip := strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip")
-			if !isGzip {
-				defer bw.Close()
-			}
-
-			var (
-				wc   io.WriteCloser = bw
-				body io.Reader      = r.Body
-			)
-			if !isGzip {
-				wc = gzip.NewWriter(bw)
-			}
-			defer wc.Close()
-
-			switch {
-			case isMultipart:
-				body = MultipartToTar(multipart.NewReader(r.Body, boundary), nil)
-			case isApk:
-				body = FileToTar(r.Body, "app.apk", nil)
-			case isIpa:
-				body = FileToTar(r.Body, "app.ipa", nil)
-			}
-
-			if _, err = io.Copy(wc, body); err != nil {
-				return err
-			}
-		} else {
-			return newHTTPStatusCodeError(
-				fmt.Errorf("unsupported Content-Type %s", mediaType),
-				http.StatusUnsupportedMediaType,
-			)
+		if err = cli.Get(ctx, client.ObjectKey{Name: bucketName, Namespace: namespace}, bucket); err != nil {
+			return err
 		}
 
-		if isMultipart {
-			if referer := r.Header.Get("Referer"); referer != "" {
+		b, err := OpenBucket(ctx, cli, bucket)
+		if err != nil {
+			return err
+		}
+
+		ext := ".ipa"
+		if mediaType == ContentTypeAPK {
+			ext = ".apk"
+		}
+
+		var (
+			key      = fmt.Sprintf("%s%s", appName, ext)
+			selector = map[string]string{
+				labelApp: appName,
+			}
+			mobileApp = &momov1alpha1.MobileApp{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      appName,
+				},
+				Spec: momov1alpha1.MobileAppSpec{
+					Selector: selector,
+				},
+			}
+		)
+
+		if _, err = controllerutil.CreateOrUpdate(ctx, cli, mobileApp, func() error {
+			mobileApp.Spec.Selector = selector
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		switch ext {
+		case ".apk":
+			if err = cli.Create(ctx,
+				&momov1alpha1.APK{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:    namespace,
+						GenerateName: fmt.Sprintf("%s-", appName),
+						Labels:       selector,
+					},
+					Spec: momov1alpha1.APKSpec{
+						Bucket: corev1.LocalObjectReference{
+							Name: bucketName,
+						},
+						Key: key,
+					},
+				},
+			); err != nil {
 				return err
 			}
+		default:
+			if err = cli.Create(ctx,
+				&momov1alpha1.IPA{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:    namespace,
+						GenerateName: fmt.Sprintf("%s-", appName),
+						Labels:       selector,
+					},
+					Spec: momov1alpha1.IPASpec{
+						Bucket: corev1.LocalObjectReference{
+							Name: bucketName,
+						},
+						Key: key,
+					},
+				},
+			); err != nil {
+				return err
+			}
+		}
+		wc, err := b.NewWriter(ctx, key, &blob.WriterOptions{ContentType: mediaType})
+		if err != nil {
+			return err
+		}
+		defer wc.Close()
+
+		if _, err = io.Copy(wc, rc); err != nil {
+			return err
+		}
+
+		if mediaType == ContentTypeMultiPart {
+			referer := r.Header.Get("Referer")
+			if referer != "" {
+				return err
+			}
+
+			w.WriteHeader(http.StatusTemporaryRedirect)
+			w.Header().Set("Location", referer)
+
+			return nil
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		return respondJSON(w, map[string]string{"hello": "there"}, wantsPretty(r))
+
+		return nil
 	}
 }
 
-func handleManifests(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseWriter, r *http.Request) error {
+func handleManifests(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		cli, err := newClient(nil, scheme)
 		if err != nil {
@@ -211,15 +242,25 @@ func handleManifests(scheme *runtime.Scheme, baseURL *url.URL) func(w http.Respo
 			namespace  = chi.URLParam(r, "namespace")
 			bucketName = chi.URLParam(r, "bucket")
 			appName    = chi.URLParam(r, "app")
+			version    = chi.URLParam(r, "version")
 		)
 
 		if err := cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: appName}, mobileApp); err != nil {
 			return err
 		}
 
+		baseURL, err := urlFromReq(r)
+		if err != nil {
+			return err
+		}
+
 		values := url.Values{}
 		values.Add("action", "download-manifest")
-		values.Add("url", baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "manifest.plist").String())
+		if version == "" {
+			values.Add("url", baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "manifest.plist").String())
+		} else {
+			values.Add("url", baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, version, "manifest.plist").String())
+		}
 
 		http.Redirect(w, r,
 			(&url.URL{Scheme: "itms-services", RawQuery: values.Encode()}).String(),
@@ -230,20 +271,7 @@ func handleManifests(scheme *runtime.Scheme, baseURL *url.URL) func(w http.Respo
 	}
 }
 
-func IsAPK(mobileApp *momov1alpha1.MobileApp) bool {
-	return mobileApp.Spec.Type == momov1alpha1.MobileAppTypeAPK || strings.EqualFold(filepath.Ext(mobileApp.Spec.Key), ".apk")
-}
-
-func IsIPA(mobileApp *momov1alpha1.MobileApp) bool {
-	return mobileApp.Spec.Type == momov1alpha1.MobileAppTypeIPA || strings.EqualFold(filepath.Ext(mobileApp.Spec.Key), ".ipa")
-}
-
-const (
-	ImageDisplayPx  = 57
-	ImageFullSizePx = 512
-)
-
-func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseWriter, r *http.Request) error {
+func handleFiles(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		var (
 			ctx        = r.Context()
@@ -251,6 +279,7 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 			namespace  = strings.ToLower(chi.URLParam(r, "namespace"))
 			bucketName = strings.ToLower(chi.URLParam(r, "bucket"))
 			appName    = strings.ToLower(chi.URLParam(r, "app"))
+			version    = chi.URLParam(r, "version")
 			file       = strings.ToLower(chi.URLParam(r, "file"))
 			ext        = filepath.Ext(file)
 		)
@@ -275,39 +304,63 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 		}
 
 		var (
-			key         = mobileApp.Spec.Key
+			findAny = func(app momov1alpha1.MobileAppStatusApp, _ int) bool {
+				return true
+			}
+			findLatest = func(app momov1alpha1.MobileAppStatusApp, _ int) bool {
+				return app.Latest
+			}
+			find = findLatest
+		)
+		if version != "" {
+			find = func(app momov1alpha1.MobileAppStatusApp, _ int) bool {
+				return strings.EqualFold(app.Version, version)
+			}
+		}
+
+		var (
+			ipa = xslice.Coalesce(
+				xslice.Find(mobileApp.Status.IPAs, find),
+				xslice.Find(mobileApp.Status.IPAs, findAny),
+			)
+			apk = xslice.Coalesce(
+				xslice.Find(mobileApp.Status.APKs, find),
+				xslice.Find(mobileApp.Status.APKs, findAny),
+			)
+			key         string
 			contentType string
 		)
 		switch ext {
 		case ".apk":
-			if !IsAPK(mobileApp) {
-				return fmt.Errorf("app is not an .apk")
+			if apk.Key == "" {
+				return fmt.Errorf("app does not have an .apk")
 			}
+			key = apk.Key
 			contentType = ContentTypeAPK
 		case ".ipa":
-			if !IsIPA(mobileApp) {
-				return fmt.Errorf("app is not an .ipa")
+			if ipa.Key == "" {
+				return fmt.Errorf("app does not have an .ipa")
 			}
+			key = ipa.Key
 			contentType = ContentTypeIPA
 		case ".png", ".jpg", ".jpeg":
 			var (
-				findAny = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
+				findAny = func(_ momov1alpha1.AppStatusIcon, _ int) bool {
 					return true
 				}
-				find = findAny
+				find = func(icon momov1alpha1.AppStatusIcon, _ int) bool {
+					return strings.TrimSuffix(filepath.Base(icon.Key), filepath.Ext(icon.Key)) == strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+				}
 			)
 
-			if xslice.Some([]string{fmt.Sprint(ImageDisplayPx), "display"}, func(part string, _ int) bool {
-				return strings.Contains(file, part)
-			}) {
-				find = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
-					return image.Display
+			switch file {
+			case "display.png":
+				find = func(icon momov1alpha1.AppStatusIcon, _ int) bool {
+					return icon.Display
 				}
-			} else if xslice.Some([]string{fmt.Sprint(ImageFullSizePx), "full"}, func(part string, _ int) bool {
-				return strings.Contains(file, part)
-			}) {
-				find = func(image momov1alpha1.MobileAppStatusImage, _ int) bool {
-					return image.FullSize
+			case "full-size.png":
+				find = func(icon momov1alpha1.AppStatusIcon, _ int) bool {
+					return icon.FullSize
 				}
 			}
 
@@ -318,16 +371,47 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 				contentType = ContentTypePNG
 			}
 
+			cr0 := &momov1alpha1.IPA{}
+
+			if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ipa.Name}, cr0); err != nil {
+				return err
+			}
+
+			cr1 := &momov1alpha1.APK{}
+
+			if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: apk.Name}, cr1); err != nil {
+				return err
+			}
+
+			icons := cr0.Status.Icons
+			icons = append(icons, cr1.Status.Icons...)
+
+			// TODO: I guess we search all apk and ipa icons?
 			key = xslice.
 				Coalesce(
-					xslice.Find(mobileApp.Status.Images, find),
-					xslice.Find(mobileApp.Status.Images, findAny),
+					xslice.Find(icons, find),
+					xslice.Find(icons, findAny),
 				).
 				Key
 		default:
 			if file == "manifest.plist" {
-				if mobileApp.Status.BundleIdentifier == "" || mobileApp.Status.BundleName == "" || mobileApp.Status.Version == "" {
+				if ipa.Key == "" {
+					return fmt.Errorf("app does not have an .ipa")
+				}
+
+				cr := &momov1alpha1.IPA{}
+
+				if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ipa.Name}, cr); err != nil {
+					return err
+				}
+
+				if cr.Status.BundleIdentifier == "" || cr.Status.BundleName == "" || cr.Status.Version == "" {
 					return newHTTPStatusCodeError(fmt.Errorf("mobileapp is in phase %s", mobileApp.Status.Phase), http.StatusPreconditionFailed)
+				}
+
+				baseURL, err := urlFromReq(r)
+				if err != nil {
+					return err
 				}
 
 				enc := plist.NewEncoder(w)
@@ -343,23 +427,23 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 							Assets: []ios.ManifestItemAsset{
 								{
 									Kind: "software-package",
-									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, mobileApp.Spec.Key).String(),
+									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, version, strings.ToLower(fmt.Sprintf("%s.ipa", cr.Status.BundleName))).String(),
 								},
 								{
 									Kind: "full-size-image",
-									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "full-size.png").String(),
+									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, version, "full-size.png").String(),
 								},
 								{
 									Kind: "display-image",
-									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, "display.png").String(),
+									URL:  baseURL.JoinPath("/api/v1", namespace, bucketName, "files", appName, version, "display.png").String(),
 								},
 							},
 							Metadata: &ios.ManifestItemMetadata{
 								Kind:               "software",
 								PlatformIdentifier: "com.apple.platform.iphoneos",
-								BundleIdentifier:   mobileApp.Status.BundleIdentifier,
-								BundleVersion:      mobileApp.Status.Version,
-								Title:              mobileApp.Status.BundleName,
+								BundleIdentifier:   cr.Status.BundleIdentifier,
+								BundleVersion:      cr.Status.Version,
+								Title:              cr.Status.BundleName,
 							},
 						},
 					},
@@ -420,6 +504,119 @@ func handleFiles(scheme *runtime.Scheme, baseURL *url.URL) func(w http.ResponseW
 		w.Header().Set("Content-Type", contentType)
 
 		if _, err := io.Copy(w, rc); err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func urlFromReq(r *http.Request) (*url.URL, error) {
+	if origin := r.Header.Get("Origin"); origin != "" {
+		return url.Parse(origin)
+	}
+
+	// TODO: Support "Forwarded" header.
+
+	scheme := "http"
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+		scheme = forwardedProto
+	} else if r.TLS != nil {
+		scheme = "https"
+	}
+
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+
+	return url.Parse(fmt.Sprintf("%s://%s", scheme, host))
+}
+
+func handleAssetLinks(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Request) error {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		cli, err := newClient(nil, scheme)
+		if err != nil {
+			return err
+		}
+
+		mobileApps := &momov1alpha1.MobileAppList{}
+
+		if err := cli.List(r.Context(), mobileApps, &client.ListOptions{}); err != nil {
+			return err
+		}
+
+		targets := []android.Target{}
+
+		for _, mobileApp := range mobileApps.Items {
+			for _, assetLink := range mobileApp.Status.AssetLinkTargets {
+				targets = append(targets, android.Target{
+					Namespace:              "android_app",
+					PackageName:            assetLink.Package,
+					SHA256CertFingerprints: assetLink.SHA256CertFingerprints,
+				})
+			}
+		}
+
+		var (
+			assetLinks = xslice.Map(targets, func(target android.Target, _ int) android.AssetLink {
+				return android.AssetLink{
+					Relation: []string{"delegate_permission/common.handle_all_urls"},
+					Target:   target,
+				}
+			})
+			enc = json.NewEncoder(w)
+		)
+		if wantsPretty(r) {
+			enc.SetIndent("", "  ")
+		}
+
+		if err := enc.Encode(assetLinks); err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func handleAppleAppSiteAssociation(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Request) error {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		cli, err := newClient(nil, scheme)
+		if err != nil {
+			return err
+		}
+
+		mobileApps := &momov1alpha1.MobileAppList{}
+
+		if err := cli.List(r.Context(), mobileApps, &client.ListOptions{}); err != nil {
+			return err
+		}
+
+		var (
+			appleAppSiteAssociation = ios.AppleAppSiteAssociation{
+				AppLinks: ios.AppLinks{
+					Details: xslice.
+						Map(mobileApps.Items, func(mobileApp momov1alpha1.MobileApp, _ int) ios.Details {
+							path := filepath.Join("/api/v1", mobileApp.Namespace) // TODO.
+							return ios.Details{
+								AppIDs: mobileApp.Status.AppleAppSiteAssociationAppIDs,
+								Components: []ios.Component{
+									{
+										Path:    path,
+										Comment: fmt.Sprintf("Matches any URL with a path that maches %s.", path),
+									},
+								},
+							}
+						}),
+				},
+			}
+			enc = json.NewEncoder(w)
+		)
+		if wantsPretty(r) {
+			enc.SetIndent("", "  ")
+		}
+
+		if err := enc.Encode(appleAppSiteAssociation); err != nil {
 			return err
 		}
 

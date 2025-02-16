@@ -11,8 +11,18 @@ type Manifest struct {
 	UsesPermission []ManifestUsesPermission `xml:"uses-permission"`
 	UsesFeature    []ManifestUsesFeature    `xml:"uses-feature"`
 	Permission     []ManifestPermission     `xml:"permission"`
-	Application    *ManifestApplication     `xml:"application"`
+	Application    ManifestApplication      `xml:"application"`
 	Attrs          []xml.Attr               `xml:",any,attr"`
+}
+
+func (m *Manifest) Attr() string {
+	for _, attr := range m.Attrs {
+		if attr.Name.Local == "package" {
+			return attr.Value
+		}
+	}
+
+	return ""
 }
 
 type ManifestUsesPermission struct {
@@ -38,9 +48,9 @@ type ManifestApplication struct {
 }
 
 type ManifestApplicationActivity struct {
-	Metadata     *ManifestApplicationMetadata     `xml:"metadata"`
-	IntentFilter *ManifestApplicationIntentFilter `xml:"intent-filter"`
-	Attrs        []xml.Attr                       `xml:",any,attr"`
+	Metadata     ManifestApplicationMetadata     `xml:"metadata"`
+	IntentFilter ManifestApplicationIntentFilter `xml:"intent-filter"`
+	Attrs        []xml.Attr                      `xml:",any,attr"`
 }
 
 type ManifestApplicationIntentFilter struct {

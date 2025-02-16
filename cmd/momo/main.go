@@ -1,12 +1,10 @@
 package main
 
 import (
-	"archive/tar"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -211,7 +210,11 @@ func NewControl() *cobra.Command {
 					return err
 				}
 
-				if err = (&controller.UploadReconciler{}).SetupWithManager(mgr); err != nil {
+				if err = (&controller.IPAReconciler{}).SetupWithManager(mgr); err != nil {
+					return err
+				}
+
+				if err = (&controller.APKReconciler{}).SetupWithManager(mgr); err != nil {
 					return err
 				}
 
@@ -264,9 +267,8 @@ func NewControl() *cobra.Command {
 
 func NewServe() *cobra.Command {
 	var (
-		addr   string
-		urlstr string
-		cmd    = &cobra.Command{
+		addr string
+		cmd  = &cobra.Command{
 			Use:           "srv",
 			SilenceErrors: true,
 			SilenceUsage:  true,
@@ -277,24 +279,11 @@ func NewServe() *cobra.Command {
 				}
 				defer l.Close()
 
-				baseURL, err := url.Parse("http://" + addr)
-				if err != nil {
-					return err
-				}
-
-				if urlstr != "" {
-					var err error
-					baseURL, err = url.Parse(urlstr)
-					if err != nil {
-						return err
-					}
-				}
-
 				var (
 					srv = &http.Server{
 						Addr:              addr,
 						ReadHeaderTimeout: time.Second * 5,
-						Handler:           momoutil.NewHandler(scheme, baseURL),
+						Handler:           momoutil.NewHandler(scheme),
 					}
 					eg, ctx = errgroup.WithContext(cmd.Context())
 				)
@@ -321,7 +310,6 @@ func NewServe() *cobra.Command {
 	// Just allow this flag to be passed, it's parsed by ctrl.GetConfig().
 	cmd.Flags().String("kubeconfig", "", "Kube config.")
 	cmd.Flags().StringVar(&addr, "addr", ":8080", "listen address for momo")
-	cmd.Flags().StringVar(&urlstr, "url", "", "base URL for momo")
 
 	return cmd
 }
@@ -368,8 +356,8 @@ func NewUpload() *cobra.Command {
 	var (
 		addr string
 		cmd  = &cobra.Command{
-			Use:           "upload [flags] (namespace) (bucket) (name) (.ipa|.apk|.png...)",
-			Args:          cobra.MinimumNArgs(4),
+			Use:           "upload [flags] (namespace) (bucket) (name) (.ipa|.apk)",
+			Args:          cobra.ExactArgs(4),
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			RunE: func(cmd *cobra.Command, args []string) error {
@@ -378,48 +366,26 @@ func NewUpload() *cobra.Command {
 					namespace  = args[0]
 					bucketName = args[1]
 					appName    = args[2]
+					file       = args[3]
 					cli        = new(momo.Client)
 				)
 
+				f, err := os.Open(file)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+
 				var (
-					pr, pw = io.Pipe()
-					tw     = tar.NewWriter(pw)
+					ext         = strings.ToLower(filepath.Ext(file))
+					contentType string
 				)
-
-				go func() {
-					err := func() error {
-						for _, arg := range args[3:] {
-							f, err := os.Open(arg)
-							if err != nil {
-								return err
-							}
-							defer f.Close()
-
-							fi, err := f.Stat()
-							if err != nil {
-								return err
-							}
-
-							hdr, err := tar.FileInfoHeader(fi, fi.Name())
-							if err != nil {
-								return err
-							}
-
-							if err = tw.WriteHeader(hdr); err != nil {
-								return err
-							}
-
-							if _, err = io.Copy(tw, f); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					}()
-
-					_ = tw.Close()
-					_ = pw.CloseWithError(err)
-				}()
+				switch ext {
+				case ".apk":
+					contentType = momoutil.ContentTypeAPK
+				case ".ipa":
+					contentType = momoutil.ContentTypeIPA
+				}
 
 				if addr != "" {
 					var err error
@@ -434,7 +400,7 @@ func NewUpload() *cobra.Command {
 					cli.HTTPClient.Transport = &kubeAuthTransport{config: cfg}
 				}
 
-				if err := cli.UploadApp(ctx, pr, namespace, bucketName, appName); err != nil {
+				if err := cli.UploadApp(ctx, f, contentType, namespace, bucketName, appName); err != nil {
 					return err
 				}
 

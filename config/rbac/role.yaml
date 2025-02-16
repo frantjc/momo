@@ -13,9 +13,9 @@ rules:
 - apiGroups:
   - momo.frantj.cc
   resources:
+  - apks
   - buckets
-  - mobileapps
-  - uploads
+  - ipas
   verbs:
   - create
   - delete
@@ -27,17 +27,17 @@ rules:
 - apiGroups:
   - momo.frantj.cc
   resources:
+  - apks/finalizers
   - buckets/finalizers
-  - mobileapps/finalizers
-  - uploads/finalizers
+  - ipas/finalizers
   verbs:
   - update
 - apiGroups:
   - momo.frantj.cc
   resources:
+  - apks/status
   - buckets/status
-  - mobileapps/status
-  - uploads/status
+  - ipas/status
   verbs:
   - get
   - patch

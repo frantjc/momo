@@ -2,25 +2,86 @@ package momoutil
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	xio "github.com/frantjc/x/io"
 )
 
-type TarOpts struct {
+type FileOpts struct {
 	Mode int64
 }
 
-type TarOpt interface {
-	Apply(*TarOpts)
+type FileOpt interface {
+	Apply(*FileOpts)
 }
 
-func (t *TarOpts) Apply(opts *TarOpts) {
+func (t *FileOpts) Apply(opts *FileOpts) {
 	opts.Mode = t.Mode
 }
 
-func FileToTar(r io.Reader, name string, opts ...TarOpt) io.Reader {
-	o := &TarOpts{
+func ReqToApp(req *http.Request, opts ...FileOpt) (io.ReadCloser, string, error) {
+	mediaType, params, err := mime.ParseMediaType(req.Header.Get("Content-Type"))
+	if err != nil {
+		return nil, "", err
+	}
+
+	switch mediaType {
+	case ContentTypeAPK:
+		return req.Body, mediaType, nil
+	case ContentTypeIPA:
+		return req.Body, mediaType, nil
+	case ContentTypeMultiPart:
+		boundary := params["boundary"]
+		if boundary == "" {
+			return nil, "", newHTTPStatusCodeError(
+				fmt.Errorf("missing boundary"),
+				http.StatusBadRequest,
+			)
+		}
+
+		r, mediaType, err := TarToApp(MultipartToTar(multipart.NewReader(req.Body, params["boundary"])))
+		if err != nil {
+			return nil, "", err
+		}
+
+		return xio.ReadCloser{
+			Reader: r,
+			Closer: req.Body,
+		}, mediaType, nil
+	case ContentTypeTar:
+		if strings.EqualFold(req.Header.Get("Content-Encoding"), "gzip") {
+			zr, err := gzip.NewReader(req.Body)
+			if err != nil {
+				return nil, "", err
+			}
+
+			r, mediaType, err := TarToApp(zr)
+			if err != nil {
+				return nil, "", err
+			}
+			return xio.ReadCloser{
+				Reader: r,
+				Closer: req.Body,
+			}, mediaType, nil
+		}
+	}
+
+	return nil, "", newHTTPStatusCodeError(
+		fmt.Errorf("unsupported Content-Type %s", mediaType),
+		http.StatusUnsupportedMediaType,
+	)
+}
+
+func TarToApp(r io.Reader, opts ...FileOpt) (io.Reader, string, error) {
+	o := &FileOpts{
 		Mode: 0777,
 	}
 
@@ -28,38 +89,32 @@ func FileToTar(r io.Reader, name string, opts ...TarOpt) io.Reader {
 		opt.Apply(o)
 	}
 
-	pr, pw := io.Pipe()
+	tr := tar.NewReader(r)
 
-	go func() {
-		tw := tar.NewWriter(pw)
-		defer tw.Close()
-
-		if err := func() error {
-			if err := tw.WriteHeader(&tar.Header{
-				Name: name,
-				Mode: o.Mode,
-			}); err != nil {
-				return err
-			}
-
-			if _, err := io.Copy(tw, r); err != nil {
-				return err
-			}
-
-			return nil
-		}(); err != nil {
-			pw.CloseWithError(err)
-		} else {
-			pw.Close()
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return nil, "", err
 		}
-	}()
 
-	return pr
+		ext := strings.ToLower(filepath.Ext(hdr.Name))
+
+		switch ext {
+		case ".ipa":
+			return tr, ContentTypeIPA, nil
+		case ".apk":
+			return tr, ContentTypeAPK, nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("no app found before EOF")
 }
 
 // MultipartToTar converts a *multipart.Reader to a io.Reader.
-func MultipartToTar(mr *multipart.Reader, opts ...TarOpt) io.Reader {
-	o := &TarOpts{
+func MultipartToTar(mr *multipart.Reader, opts ...FileOpt) io.Reader {
+	o := &FileOpts{
 		Mode: 0777,
 	}
 
