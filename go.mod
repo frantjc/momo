@@ -12,7 +12,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	go.uber.org/zap v1.27.0
 	gocloud.dev v0.40.0
 	golang.org/x/image v0.23.0
@@ -47,7 +47,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
