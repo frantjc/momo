@@ -10,6 +10,8 @@ import (
 type MobileAppSpec struct {
 	// +kubebuilder:validation:Required
 	Selector labels.Set `json:"selector"`
+	// +kubebuilder:validation:Optional
+	UniversalLinksHost string `json:"universalLinksHost,omitempty"`
 }
 
 // MobileAppStatus defines the observed state of MobileApp.
@@ -19,18 +21,7 @@ type MobileAppStatus struct {
 	// +kubebuilder:validation:Optional
 	APKs []MobileAppStatusApp `json:"apks,omitempty"`
 	// +kubebuilder:validation:Optional
-	AssetLinkTargets []MobileAppStatusTarget `json:"assetLinkTargets,omitempty"`
-	// +kubebuilder:validation:Optional
 	IPAs []MobileAppStatusApp `json:"ipas,omitempty"`
-	// +kubebuilder:validation:Optional
-	AppleAppSiteAssociationAppIDs []string `json:"appleAppSiteAssociationAppIDs,omitempty"`
-}
-
-type MobileAppStatusTarget struct {
-	// +kubebuilder:validation:Required
-	Package string `json:"package"`
-	// +kubebuilder:validation:Required
-	SHA256CertFingerprints []string `json:"sha256CertFingerPrints"`
 }
 
 type MobileAppStatusApp struct {

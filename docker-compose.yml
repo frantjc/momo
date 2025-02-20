@@ -41,3 +41,9 @@ services:
     environment:
       MINIO_ROOT_USER: momominio
       MINIO_ROOT_PASSWORD: momominio
+  # well-known:
+  #   image: nginx
+  #   volumes:
+  #     - ./testdata/.well-known:/usr/share/nginx/html/.well-known:ro
+  #   ports:
+  #     - 8081:80

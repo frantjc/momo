@@ -44,6 +44,8 @@ spec:
                   type: string
                 description: Set is a map of label:value. It implements Labels.
                 type: object
+              universalLinksHost:
+                type: string
             required:
             - selector
             type: object
@@ -81,24 +83,6 @@ spec:
                   - bucket
                   - key
                   - name
-                  type: object
-                type: array
-              appleAppSiteAssociationAppIDs:
-                items:
-                  type: string
-                type: array
-              assetLinkTargets:
-                items:
-                  properties:
-                    package:
-                      type: string
-                    sha256CertFingerPrints:
-                      items:
-                        type: string
-                      type: array
-                  required:
-                  - package
-                  - sha256CertFingerPrints
                   type: object
                 type: array
               ipas:

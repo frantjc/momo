@@ -97,7 +97,6 @@ func NewEntrypoint() *cobra.Command {
 	cmd.AddCommand(
 		NewControl(),
 		NewServe(),
-		NewPing(),
 		NewUpload(),
 	)
 
@@ -310,44 +309,6 @@ func NewServe() *cobra.Command {
 	// Just allow this flag to be passed, it's parsed by ctrl.GetConfig().
 	cmd.Flags().String("kubeconfig", "", "Kube config.")
 	cmd.Flags().StringVar(&addr, "addr", ":8080", "listen address for momo")
-
-	return cmd
-}
-
-func NewPing() *cobra.Command {
-	var (
-		addr string
-		cmd  = &cobra.Command{
-			Use:           "ping [flags]",
-			SilenceErrors: true,
-			SilenceUsage:  true,
-			RunE: func(cmd *cobra.Command, _ []string) error {
-				var (
-					ctx = cmd.Context()
-					cli = new(momo.Client)
-				)
-
-				if addr != "" {
-					var err error
-					if cli.BaseURL, err = url.Parse(addr); err != nil {
-						return err
-					}
-				}
-
-				if err := cli.Readyz(ctx); err != nil {
-					return err
-				}
-
-				if err := cli.Healthz(ctx); err != nil {
-					return err
-				}
-
-				return nil
-			},
-		}
-	)
-
-	cmd.Flags().StringVar(&addr, "addr", "", "listen address for momo")
 
 	return cmd
 }

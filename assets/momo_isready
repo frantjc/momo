@@ -1,5 +1,0 @@
-#!/bin/sh
-
-PATH=$PATH:`pwd`;
-export PATH;
-exec momo ping $@

@@ -2,20 +2,17 @@ package android
 
 import (
 	"archive/tar"
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/xml"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/frantjc/momo/apktool"
+	"github.com/frantjc/momo/keytool"
 	xslice "github.com/frantjc/x/slice"
 	"gopkg.in/yaml.v3"
 )
@@ -126,30 +123,7 @@ func (a *APKDecoder) Metadata(ctx context.Context) (*apktool.Metadata, error) {
 }
 
 func (a *APKDecoder) SHA256CertFingerprints(ctx context.Context) (string, error) {
-	var (
-		buf = new(bytes.Buffer)
-		//nolint:gosec
-		// TODO: Refactor to pkg like apktool.
-		cmd = exec.CommandContext(ctx, a.keytool, "-printcert", "-jarfile", a.Name)
-	)
-
-	cmd.Stdout = buf
-
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	scanner := bufio.NewScanner(buf)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "SHA256: ") {
-			if fields := strings.Fields(line); len(fields) >= 2 {
-				return fields[1], nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("sha256 cert fingerprints not found")
+	return keytool.Command(a.keytool).SHA256CertFingerprints(ctx, a.Name)
 }
 
 func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
