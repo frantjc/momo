@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -230,4 +231,23 @@ func (r *IPAReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&momov1alpha1.IPA{}).
 		Named("ipa").
 		Complete(r)
+}
+
+func (r *IPAReconciler) EventHandler() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
+		ipas := &momov1alpha1.IPAList{}
+
+		if err := r.Client.List(ctx, ipas, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+			return []ctrl.Request{}
+		}
+
+		return xslice.Map(
+			xslice.Filter(ipas.Items, func(ipa momov1alpha1.IPA, _ int) bool {
+				return ipa.Spec.Bucket.Name == obj.GetName()
+			}),
+			func(ipa momov1alpha1.IPA, _ int) ctrl.Request {
+				return ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&ipa)}
+			},
+		)
+	})
 }

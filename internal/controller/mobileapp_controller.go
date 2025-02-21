@@ -223,18 +223,20 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		if len(bundleIdentifiers) > 0 {
-			appleAppSiteAssociation := ios.AppleAppSiteAssociation{}
-
-			for _, bundleIdentifier := range bundleIdentifiers {
-				appleAppSiteAssociation.AppLinks.Details = append(appleAppSiteAssociation.AppLinks.Details, ios.Details{
-					AppIDs: []string{bundleIdentifier},
-					Components: []ios.Component{
+			appleAppSiteAssociation := ios.AppleAppSiteAssociation{
+				AppLinks: ios.AppLinks{
+					Details: []ios.Details{
 						{
-							Path:    "/",
-							Comment: "Matches any URL.",
+							AppIDs: bundleIdentifiers,
+							Components: []ios.Component{
+								{
+									Path:    "/",
+									Comment: "Matches any URL.",
+								},
+							},
 						},
 					},
-				})
+				},
 			}
 
 			appleAppSiteAssociationJSON, err := json.MarshalIndent(appleAppSiteAssociation, "", "  ")

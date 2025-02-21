@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -192,6 +193,26 @@ func (r *APKReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&momov1alpha1.APK{}).
+		Watches(&momov1alpha1.Bucket{}, r.EventHandler()).
 		Named("apk").
 		Complete(r)
+}
+
+func (r *APKReconciler) EventHandler() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
+		apks := &momov1alpha1.APKList{}
+
+		if err := r.Client.List(ctx, apks, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+			return []ctrl.Request{}
+		}
+
+		return xslice.Map(
+			xslice.Filter(apks.Items, func(apk momov1alpha1.APK, _ int) bool {
+				return apk.Spec.Bucket.Name == obj.GetName()
+			}),
+			func(apk momov1alpha1.APK, _ int) ctrl.Request {
+				return ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&apk)}
+			},
+		)
+	})
 }
