@@ -7,10 +7,12 @@ godebug default=go1.23
 require (
 	github.com/928799934/go-png-cgbi v1.0.0
 	github.com/frantjc/x v0.0.0-20250205025335-17ff01e148ed
+	github.com/go-chi/chi v1.5.5
 	github.com/go-logr/logr v1.4.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/spf13/cobra v1.8.1
 	gocloud.dev v0.40.0
+	golang.org/x/mod v0.23.0
 	golang.org/x/sync v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
 	howett.net/plist v1.0.1
@@ -54,7 +56,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-chi/chi v1.5.5
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
@@ -97,7 +98,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/mod v0.23.0
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
