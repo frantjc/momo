@@ -91,3 +91,12 @@ mv $(1) $(1)-$(3) ;\
 } ;\
 ln -sf $(1)-$(3) $(1)
 endef
+
+.PHONY: testdata/momo/node_modules
+testdata/momo/node_modules:
+	@cd testdata/momo && npm install
+
+.PHONY: testdata/momo.apk
+testdata/momo.apk: testdata/momo/node_modules
+	@cd testdata/momo && npm run android
+	@cp testdata/momo/android/app/build/outputs/apk/release/app-release.apk $@
