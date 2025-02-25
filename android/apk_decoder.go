@@ -2,22 +2,17 @@ package android
 
 import (
 	"archive/tar"
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/xml"
-	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/apktool"
+	"github.com/frantjc/momo/keytool"
 	xslice "github.com/frantjc/x/slice"
 	"gopkg.in/yaml.v3"
 )
@@ -25,7 +20,8 @@ import (
 type APKDecoder struct {
 	Name string
 
-	apktool  apktool.Command
+	apktool  string
+	keytool  string
 	dir      string
 	decoded  bool
 	manifest *Manifest
@@ -35,9 +31,15 @@ type APKDecoder struct {
 
 type APKDecoderOpt func(*APKDecoder)
 
-func WithAPKTool(c apktool.Command) APKDecoderOpt {
+func WithAPKTool(b string) APKDecoderOpt {
 	return func(a *APKDecoder) {
-		a.apktool = c
+		a.apktool = b
+	}
+}
+
+func WithKeytool(b string) APKDecoderOpt {
+	return func(a *APKDecoder) {
+		a.keytool = b
 	}
 }
 
@@ -48,7 +50,7 @@ func WithDir(dir string) APKDecoderOpt {
 }
 
 func NewAPKDecoder(name string, opts ...APKDecoderOpt) *APKDecoder {
-	ad := &APKDecoder{Name: name}
+	ad := &APKDecoder{Name: name, keytool: "keytool", apktool: "apktool"}
 
 	for _, opt := range opts {
 		opt(ad)
@@ -62,7 +64,7 @@ func (a *APKDecoder) decode(ctx context.Context) error {
 		return nil
 	} else if a.dir == "" {
 		var err error
-		a.dir, err = os.MkdirTemp("", fmt.Sprintf("%s-*", filepath.Base(a.Name)))
+		a.dir, err = os.MkdirTemp(filepath.Dir(a.Name), "*")
 		if err != nil {
 			return err
 		}
@@ -74,14 +76,8 @@ func (a *APKDecoder) decode(ctx context.Context) error {
 		OutputDirectory: a.dir,
 	}
 
-	if a.apktool == "" {
-		if err := apktool.Decode(ctx, a.Name, opts); err != nil {
-			return err
-		}
-	} else {
-		if err := a.apktool.Decode(ctx, a.Name, opts); err != nil {
-			return err
-		}
+	if err := apktool.Command(a.apktool).Decode(ctx, a.Name, opts); err != nil {
+		return err
 	}
 
 	a.decoded = true
@@ -127,34 +123,8 @@ func (a *APKDecoder) Metadata(ctx context.Context) (*apktool.Metadata, error) {
 }
 
 func (a *APKDecoder) SHA256CertFingerprints(ctx context.Context) (string, error) {
-	var (
-		buf = new(bytes.Buffer)
-		//nolint:gosec
-		cmd = exec.CommandContext(ctx, "keytool", "-printcert", "-jarfile", a.Name)
-	)
-
-	cmd.Stdout = buf
-
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	scanner := bufio.NewScanner(buf)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "SHA256: ") {
-			if fields := strings.Fields(line); len(fields) >= 2 {
-				return fields[1], nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("sha256 cert fingerprints not found")
+	return keytool.Command(a.keytool).SHA256CertFingerprints(ctx, a.Name)
 }
-
-var (
-	_ momo.AppDecoder = &APKDecoder{}
-)
 
 func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 	if _, err := a.Manifest(ctx); err != nil {
@@ -165,6 +135,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 		iconType = "drawable"
 		iconName = "ic_launcher"
 	)
+
 	for _, attr := range a.manifest.Attrs {
 		if attr.Name.Space == "http://schemas.android.com/apk/res/android" && attr.Name.Local == "icon" {
 			iconType, iconName = path.Split(attr.Value)
@@ -179,7 +150,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 	)
 
 	go func() {
-		if err := filepath.WalkDir(a.dir, func(path string, d fs.DirEntry, err error) error {
+		err := filepath.WalkDir(a.dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			} else if d.IsDir() {
@@ -192,7 +163,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 			}
 
 			var (
-				base = filepath.Base(rel)
+				base = strings.ToLower(filepath.Base(rel))
 				ext  = filepath.Ext(base)
 			)
 
@@ -201,6 +172,7 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 				if err != nil {
 					return err
 				}
+				defer f.Close()
 
 				fi, err := d.Info()
 				if err != nil {
@@ -219,30 +191,29 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 				if _, err = io.Copy(tw, f); err != nil {
 					return err
 				}
-
-				if err = f.Close(); err != nil {
-					return err
-				}
 			}
 
 			return nil
-		}); err != nil {
-			_ = tw.Close()
-			_ = pw.CloseWithError(err)
-			return
-		}
+		})
 
 		_ = tw.Close()
-		_ = pw.Close()
+		_ = pw.CloseWithError(err)
 	}()
 
 	return pr, nil
 }
 
 func (a *APKDecoder) Close() error {
+	if a.decoded {
+		if err := os.RemoveAll(a.dir); err != nil {
+			return err
+		}
+	}
+
 	a.decoded = false
 	a.metadata = nil
 	a.manifest = nil
 	a.icons = nil
-	return errors.Join(os.RemoveAll(a.dir), os.Remove(a.Name))
+
+	return os.Remove(a.Name)
 }

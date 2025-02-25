@@ -1,23 +1,4 @@
-# macOS
-.DS_Store
-
-# iOS
-Payload/
-
-# IDE
+.idea/
 .vscode/
-
-# goreleaser
-dist/
-
-# go
-vendor/
-
-# node
-node_modules/
-
-# remix
-.cache/
-build/
-
-hack/
+bin/
+.DS_Store

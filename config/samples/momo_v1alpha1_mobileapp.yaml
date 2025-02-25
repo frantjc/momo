@@ -1,0 +1,9 @@
+---
+apiVersion: momo.frantj.cc/v1alpha1
+kind: MobileApp
+metadata:
+  name: mobileapp-sample
+  namespace: default
+spec:
+  bucket:
+    name: default

@@ -12,8 +12,8 @@ type Info struct {
 	CFBundleDisplayName       string   `plist:"CFBundleDisplayName"`
 	CFBundleExecutable        string   `plist:"CFBundleExecutable"`
 	CFBundleIconFiles         []string `plist:"CFBundleIconFiles"`
-	CFBundleIcons             *struct {
-		CFBundlePrimaryIcon *struct {
+	CFBundleIcons             struct {
+		CFBundlePrimaryIcon struct {
 			CFBundleIconFiles []string `plist:"CFBundleIconFiles"`
 		} `plist:"CFBundlePrimaryIcon"`
 	} `plist:"CFBundleIcons"`

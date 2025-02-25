@@ -1,8 +1,0 @@
-# github actions
-!dist/
-
-# tsc
-lib/
-
-# yarn
-node_modules/

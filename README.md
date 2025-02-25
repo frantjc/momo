@@ -1,1 +1,1 @@
-# momo [![godoc](https://pkg.go.dev/badge/github.com/frantjc/momo.svg)](https://pkg.go.dev/github.com/frantjc/momo) [![goreportcard](https://goreportcard.com/badge/github.com/frantjc/momo)](https://goreportcard.com/report/github.com/frantjc/momo)
+# momo

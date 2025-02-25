@@ -24,10 +24,10 @@ type Metadata struct {
 	Version                string         `yaml:"version,omitempty"`
 	APKFileName            string         `yaml:"apkFileName,omitempty"`
 	IsFrameworkAPK         bool           `yaml:"isFrameworkApk,omitempty"`
-	UsesFramework          *UsesFramework `yaml:"usesFramework,omitempty"`
-	SDKInfo                *SDKInfo       `yaml:"sdkInfo,omitempty"`
-	PackageInfo            *PackageInfo   `yaml:"packageInfo,omitempty"`
-	VersionInfo            *VersionInfo   `yaml:"versionInfo,omitempty"`
+	UsesFramework          UsesFramework  `yaml:"usesFramework,omitempty"`
+	SDKInfo                SDKInfo        `yaml:"sdkInfo,omitempty"`
+	PackageInfo            PackageInfo    `yaml:"packageInfo,omitempty"`
+	VersionInfo            VersionInfo    `yaml:"versionInfo,omitempty"`
 	ResourcesAreCompressed bool           `yaml:"resourcesAreCompressed,omitempty"`
 	SharedLibrary          bool           `yaml:"sharedLibrary,omitempty"`
 	SparseResources        bool           `yaml:"sparseResources,omitempty"`

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/frantjc/momo"
 	xslice "github.com/frantjc/x/slice"
 	"howett.net/plist"
 )
@@ -82,10 +81,6 @@ func (i *IPADecoder) Info(_ context.Context) (*Info, error) {
 	return i.infoFromZipReader(zr)
 }
 
-var (
-	_ momo.AppDecoder = &IPADecoder{}
-)
-
 func (i *IPADecoder) Icons(_ context.Context) (io.Reader, error) {
 	zr, err := i.zipReader()
 	if err != nil {
@@ -102,13 +97,14 @@ func (i *IPADecoder) Icons(_ context.Context) (io.Reader, error) {
 	)
 
 	go func() {
-		if err := func() error {
-			for _, bif := range i.info.CFBundleIconFiles {
-				if xslice.Includes([]string{".png", ".jpg", ".jpeg"}, filepath.Ext(bif)) {
-					fsf, err := zr.Open(filepath.Join(i.infoDir, bif))
+		err := func() error {
+			for _, f := range zr.File {
+				if xslice.Includes([]string{".png", ".jpg", ".jpeg"}, strings.ToLower(filepath.Ext(f.Name))) {
+					fsf, err := zr.Open(f.Name)
 					if err != nil {
 						return err
 					}
+					defer fsf.Close()
 
 					fi, err := fsf.Stat()
 					if err != nil {
@@ -131,14 +127,9 @@ func (i *IPADecoder) Icons(_ context.Context) (io.Reader, error) {
 			}
 
 			return nil
-		}(); err != nil {
-			_ = tw.Close()
-			_ = pw.CloseWithError(err)
-			return
-		}
-
+		}()
 		_ = tw.Close()
-		_ = pw.Close()
+		_ = pw.CloseWithError(err)
 	}()
 
 	return pr, nil
