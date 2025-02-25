@@ -63,13 +63,13 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		_ = r.Client.Status().Update(ctx, mobileApp)
 	}()
 
-	mobileApp.Status.Phase = "Pending"
+	mobileApp.Status.Phase = momov1alpha1.PhasePending
 	mobileApp.Status.APKs = []momov1alpha1.MobileAppStatusApp{}
 
 	packageToSHA256CertFingerprints := map[string][]string{}
 
 	for _, apk := range apks.Items {
-		if apk.Status.Phase == "Ready" {
+		if apk.Status.Phase == momov1alpha1.PhaseReady {
 			mobileApp.Status.APKs = append(mobileApp.Status.APKs, momov1alpha1.MobileAppStatusApp{
 				Name:    apk.Name,
 				Bucket:  apk.Spec.Bucket,
@@ -105,7 +105,7 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	bundleIdentifiers := []string{}
 
 	for _, ipa := range ipas.Items {
-		if ipa.Status.Phase == "Ready" {
+		if ipa.Status.Phase == momov1alpha1.PhaseReady {
 			mobileApp.Status.IPAs = append(mobileApp.Status.IPAs, momov1alpha1.MobileAppStatusApp{
 				Name:    ipa.Name,
 				Bucket:  ipa.Spec.Bucket,

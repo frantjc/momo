@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,15 +42,15 @@ func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType, nam
 
 		go func() {
 			zw := gzip.NewWriter(pw)
-			_, err := io.Copy(zw, body)
-			_ = zw.Close()
+			_, copyErr := io.Copy(zw, body)
+			err := errors.Join(zw.Close(), copyErr)
 			_ = pw.CloseWithError(err)
 		}()
 
 		body = pr
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, bucketName, "uploads", appName).String(), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, "uploads", bucketName, appName).String(), body)
 	if err != nil {
 		return err
 	}

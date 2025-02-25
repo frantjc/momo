@@ -6,7 +6,7 @@ godebug default=go1.23
 
 require (
 	github.com/928799934/go-png-cgbi v1.0.0
-	github.com/frantjc/x v0.0.0-20250205025335-17ff01e148ed
+	github.com/frantjc/x v0.0.0-20250225205746-368b1b207450
 	github.com/go-chi/chi v1.5.5
 	github.com/go-logr/logr v1.4.2
 	github.com/opencontainers/go-digest v1.0.0

@@ -99,4 +99,5 @@ testdata/momo/node_modules:
 .PHONY: testdata/momo.apk
 testdata/momo.apk: testdata/momo/node_modules
 	@cd testdata/momo && npm run android
-	@cp testdata/momo/android/app/build/outputs/apk/release/app-release.apk $@
+	@jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore testdata/momo/android/app/debug.keystore testdata/momo/android/app/build/outputs/apk/debug/app-debug.apk androiddebugkey
+	@cp testdata/momo/android/app/build/outputs/apk/debug/app-debug.apk $@

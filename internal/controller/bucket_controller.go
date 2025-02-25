@@ -43,7 +43,7 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	bucket.Status.Phase = "Pending"
+	bucket.Status.Phase = momov1alpha1.PhasePending
 
 	defer func() {
 		_ = r.Client.Status().Update(ctx, bucket)
@@ -57,7 +57,7 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	bucket.Status.Phase = "Ready"
+	bucket.Status.Phase = momov1alpha1.PhaseReady
 
 	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }

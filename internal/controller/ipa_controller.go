@@ -17,7 +17,9 @@ import (
 	"github.com/frantjc/momo/internal/momoutil"
 	"github.com/frantjc/momo/ios"
 	xslice "github.com/frantjc/x/slice"
+	xstrings "github.com/frantjc/x/strings"
 	"github.com/opencontainers/go-digest"
+	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -77,7 +79,7 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if bucket.Status.Phase != "Ready" {
+	if bucket.Status.Phase != momov1alpha1.PhaseReady {
 		return ctrl.Result{}, nil
 	}
 
@@ -120,7 +122,7 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	ipa.Status.Phase = "Pending"
+	ipa.Status.Phase = momov1alpha1.PhasePending
 
 	ipaDecoder := ios.NewIPADecoder(tmp.Name())
 	defer ipaDecoder.Close()
@@ -132,7 +134,12 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	ipa.Status.BundleName = xslice.Coalesce(info.CFBundleName, info.CFBundleDisplayName)
 	ipa.Status.BundleIdentifier = info.CFBundleIdentifier
-	ipa.Status.Version = xslice.Coalesce(info.CFBundleVersion, info.CFBundleShortVersionString)
+	ipa.Status.Version = semver.Canonical(
+		xstrings.EnsurePrefix(
+			xslice.Coalesce(info.CFBundleVersion, info.CFBundleShortVersionString),
+			"v",
+		),
+	)
 
 	icons, err := ipaDecoder.Icons(ctx)
 	if err != nil {
@@ -218,7 +225,7 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	ipa.Status.Digest = dig.String()
-	ipa.Status.Phase = "Ready"
+	ipa.Status.Phase = momov1alpha1.PhaseReady
 
 	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }

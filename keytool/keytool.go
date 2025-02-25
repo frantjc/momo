@@ -33,7 +33,10 @@ func (c Command) SHA256CertFingerprints(ctx context.Context, name string) (strin
 		return "", err
 	}
 
-	scanner := bufio.NewScanner(buf)
+	var (
+		stdout  = strings.TrimSpace(buf.String())
+		scanner = bufio.NewScanner(buf)
+	)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.Contains(line, "SHA256: ") {
@@ -43,5 +46,5 @@ func (c Command) SHA256CertFingerprints(ctx context.Context, name string) (strin
 		}
 	}
 
-	return "", fmt.Errorf("sha256 cert fingerprints not found")
+	return "", fmt.Errorf("sha256 cert fingerprints of %s not found: %s", name, stdout)
 }

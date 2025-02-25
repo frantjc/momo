@@ -6,6 +6,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
+const (
+	PhaseReady   = "Ready"
+	PhasePending = "Pending"
+)
+
 // MobileAppSpec defines the desired state of MobileApp.
 type MobileAppSpec struct {
 	// +kubebuilder:validation:Required

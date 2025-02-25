@@ -2,8 +2,8 @@ services:
   momo-ctrl:
     build: .
     command:
-      - ctrl
       - -VV
+      - ctrl
     volumes:
       - ~/.kube:/root/.kube
     environment:
@@ -15,8 +15,8 @@ services:
   momo-srv:
     build: .
     command:
-      - srv
       - -VV
+      - srv
     volumes:
       - ~/.kube:/root/.kube
     ports:
