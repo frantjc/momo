@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "android": "react-native build-android --active-arch-only",
+    "android": "react-native build-android --active-arch-only --tasks assembleRelease --mode release",
     "ios": "react-native build-ios",
     "lint": "eslint .",
     "test": "jest"
