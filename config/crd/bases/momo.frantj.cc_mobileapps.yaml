@@ -44,8 +44,14 @@ spec:
                   type: string
                 description: Set is a map of label:value. It implements Labels.
                 type: object
-              universalLinksHost:
-                type: string
+              universalLinks:
+                properties:
+                  ingress:
+                    properties:
+                      host:
+                        type: string
+                    type: object
+                type: object
             required:
             - selector
             type: object

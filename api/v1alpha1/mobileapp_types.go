@@ -16,7 +16,17 @@ type MobileAppSpec struct {
 	// +kubebuilder:validation:Required
 	Selector labels.Set `json:"selector"`
 	// +kubebuilder:validation:Optional
-	UniversalLinksHost string `json:"universalLinksHost,omitempty"`
+	UniversalLinks MobileAppSpecUniversalLinks `json:"universalLinks,omitempty"`
+}
+
+type MobileAppSpecUniversalLinks struct {
+	// +kubebuilder:validation:Optional
+	Ingress MobileAppSpecUniversalLinksIngress `json:"ingress,omitempty"`
+}
+
+type MobileAppSpecUniversalLinksIngress struct {
+	// +kubebuilder:validation:Optional
+	Host string `json:"host,omitempty"`
 }
 
 // MobileAppStatus defines the observed state of MobileApp.

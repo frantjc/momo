@@ -119,7 +119,7 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	mobileApp.Status.IPAs = markLatest(mobileApp.Status.IPAs)
 
-	if mobileApp.Spec.UniversalLinksHost != "" {
+	if mobileApp.Spec.UniversalLinks.Ingress.Host != "" {
 		var (
 			configMapData = map[string]string{}
 			podLabels     = map[string]string{
@@ -173,14 +173,20 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				Selector: deploymentSpec.Selector.MatchLabels,
 			}
 			ingressSpec = networkingv1.IngressSpec{
+				TLS: []networkingv1.IngressTLS{
+					{
+						Hosts:      []string{mobileApp.Spec.UniversalLinks.Ingress.Host},
+						SecretName: mobileApp.Name,
+					},
+				},
 				Rules: []networkingv1.IngressRule{
 					{
-						Host: mobileApp.Spec.UniversalLinksHost,
+						Host: mobileApp.Spec.UniversalLinks.Ingress.Host,
 						IngressRuleValue: networkingv1.IngressRuleValue{
 							HTTP: &networkingv1.HTTPIngressRuleValue{
 								Paths: []networkingv1.HTTPIngressPath{
 									{
-										Path:     "/.well-known",
+										Path:     "/",
 										PathType: &[]networkingv1.PathType{"Prefix"}[0],
 										Backend: networkingv1.IngressBackend{
 											Service: &networkingv1.IngressServiceBackend{
@@ -213,13 +219,13 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				})
 			}
 
-			assetLinksJSON, err := json.MarshalIndent(assetLinks, "", "  ")
+			assetLinksJSON, err := json.Marshal(assetLinks)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
 			configMapData["assetlinks.json"] = string(assetLinksJSON)
-			deploymentSpec.Template.Annotations["momo.frantj.cc/asset-links-hash"] = digest.FromBytes(assetLinksJSON).String()
+			deploymentSpec.Template.Annotations["momo.frantj.cc/assetlinks-hash"] = digest.FromBytes(assetLinksJSON).Encoded()
 		}
 
 		if len(bundleIdentifiers) > 0 {
@@ -239,13 +245,13 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				},
 			}
 
-			appleAppSiteAssociationJSON, err := json.MarshalIndent(appleAppSiteAssociation, "", "  ")
+			appleAppSiteAssociationJSON, err := json.Marshal(appleAppSiteAssociation)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
 			configMapData["apple-app-site-association"] = string(appleAppSiteAssociationJSON)
-			deploymentSpec.Template.Annotations["momo.frantj.cc/apple-app-site-association-hash"] = digest.FromBytes(appleAppSiteAssociationJSON).String()
+			deploymentSpec.Template.Annotations["momo.frantj.cc/apple-app-site-association-hash"] = digest.FromBytes(appleAppSiteAssociationJSON).Encoded()
 		}
 
 		var (
@@ -270,31 +276,55 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				Spec:       ingressSpec,
 			}
 		)
+		for _, obj := range []client.Object{configMap, deployment, service, ingress} {
+			if err := controllerutil.SetOwnerReference(mobileApp, obj, r.Scheme()); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 
 		if _, err := controllerutil.CreateOrUpdate(ctx, r, configMap, func() error {
 			configMap.Data = configMapData
-			return nil
+			return controllerutil.SetOwnerReference(mobileApp, configMap, r.Scheme())
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
 
 		if _, err := controllerutil.CreateOrUpdate(ctx, r, deployment, func() error {
 			deployment.Spec = deploymentSpec
-			return nil
+			return controllerutil.SetOwnerReference(mobileApp, deployment, r.Scheme())
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
 
 		if _, err := controllerutil.CreateOrUpdate(ctx, r, service, func() error {
 			service.Spec = serviceSpec
-			return nil
+			return controllerutil.SetOwnerReference(mobileApp, service, r.Scheme())
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
 
+		var (
+			ingressClasses = &networkingv1.IngressClassList{}
+		)
+
+		if err := r.List(ctx, ingressClasses); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		for _, ingressClass := range ingressClasses.Items {
+			if len(ingressClasses.Items) == 1 ||
+				(ingressClass.Annotations != nil && ingressClass.Annotations["ingressclass.kubernetes.io/is-default-class"] == "true") {
+				ingressSpec.IngressClassName = &ingressClass.Name
+				ingress.Spec.IngressClassName = &ingressClass.Name
+			}
+		}
+
+		ingress.ObjectMeta.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
+
 		if _, err := controllerutil.CreateOrUpdate(ctx, r, ingress, func() error {
 			ingress.Spec = ingressSpec
-			return nil
+			ingress.ObjectMeta.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
+			return controllerutil.SetOwnerReference(mobileApp, ingress, r.Scheme())
 		}); err != nil {
 			return ctrl.Result{}, err
 		}

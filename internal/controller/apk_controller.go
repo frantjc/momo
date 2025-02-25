@@ -41,11 +41,11 @@ type APKReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var (
-		_         = log.FromContext(ctx)
-		mobileApp = &momov1alpha1.APK{}
+		_   = log.FromContext(ctx)
+		apk = &momov1alpha1.APK{}
 	)
 
-	if err := r.Get(ctx, req.NamespacedName, mobileApp); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, apk); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -54,15 +54,15 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	defer func() {
-		_ = r.Client.Status().Update(ctx, mobileApp)
+		_ = r.Client.Status().Update(ctx, apk)
 	}()
 
 	bucket := &momov1alpha1.Bucket{}
 
 	if err := r.Get(ctx,
 		client.ObjectKey{
-			Namespace: mobileApp.ObjectMeta.Namespace,
-			Name:      mobileApp.Spec.Bucket.Name,
+			Namespace: apk.ObjectMeta.Namespace,
+			Name:      apk.Spec.Bucket.Name,
 		},
 		bucket,
 	); err != nil {
@@ -82,7 +82,7 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	rc, err := cli.NewReader(ctx, mobileApp.Spec.Key, nil)
+	rc, err := cli.NewReader(ctx, apk.Spec.Key, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -112,11 +112,11 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if dig.String() == mobileApp.Status.Digest {
+	if dig.String() == apk.Status.Digest {
 		return ctrl.Result{}, nil
 	}
 
-	mobileApp.Status.Phase = momov1alpha1.PhasePending
+	apk.Status.Phase = momov1alpha1.PhasePending
 
 	apkDecoder := android.NewAPKDecoder(tmp.Name())
 	defer apkDecoder.Close()
@@ -126,26 +126,33 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	mobileApp.Status.SHA256CertFingerprints = sha256CertFingerprints
+	apk.Status.SHA256CertFingerprints = sha256CertFingerprints
 
 	metadata, err := apkDecoder.Metadata(ctx)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	mobileApp.Status.Version = semver.Canonical(
+	apk.Status.Version = semver.Canonical(
 		xstrings.EnsurePrefix(
 			xslice.Coalesce(metadata.VersionInfo.VersionName, metadata.Version, fmt.Sprint(metadata.VersionInfo.VersionCode)),
 			"v",
 		),
 	)
 
+	manifest, err := apkDecoder.Manifest(ctx)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	apk.Status.Package = manifest.Package()
+
 	icons, err := apkDecoder.Icons(ctx)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	mobileApp.Status.Icons = []momov1alpha1.AppStatusIcon{}
+	apk.Status.Icons = []momov1alpha1.AppStatusIcon{}
 
 	tr := tar.NewReader(icons)
 	for {
@@ -168,7 +175,7 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			width  = bounds.Dx()
 			ext    = filepath.Ext(hdr.Name)
 			key    = filepath.Join(
-				filepath.Dir(mobileApp.Spec.Key),
+				filepath.Dir(apk.Spec.Key),
 				fmt.Sprintf("%s-%dx%d%s",
 					strings.ToLower(strings.TrimSuffix(hdr.Name, ext)),
 					height,
@@ -182,14 +189,14 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, err
 		}
 
-		mobileApp.Status.Icons = append(mobileApp.Status.Icons, momov1alpha1.AppStatusIcon{
+		apk.Status.Icons = append(apk.Status.Icons, momov1alpha1.AppStatusIcon{
 			Key:  key,
 			Size: height,
 		})
 	}
 
-	mobileApp.Status.Digest = dig.String()
-	mobileApp.Status.Phase = momov1alpha1.PhaseReady
+	apk.Status.Digest = dig.String()
+	apk.Status.Phase = momov1alpha1.PhaseReady
 
 	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }

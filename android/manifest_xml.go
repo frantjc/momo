@@ -15,7 +15,7 @@ type Manifest struct {
 	Attrs          []xml.Attr               `xml:",any,attr"`
 }
 
-func (m *Manifest) Attr() string {
+func (m *Manifest) Package() string {
 	for _, attr := range m.Attrs {
 		if attr.Name.Local == "package" {
 			return attr.Value
