@@ -119,7 +119,10 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	mobileApp.Status.IPAs = markLatest(mobileApp.Status.IPAs)
 
+
 	if mobileApp.Spec.UniversalLinks.Ingress.Host != "" {
+		bundleIdentifiers = xslice.Unique(bundleIdentifiers)
+
 		var (
 			configMapData = map[string]string{}
 			podLabels     = map[string]string{
@@ -214,7 +217,7 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					Target: android.Target{
 						Namespace:              "android_app",
 						PackageName:            packageName,
-						SHA256CertFingerprints: sha256CertFingerprints,
+						SHA256CertFingerprints: xslice.Unique(sha256CertFingerprints),
 					},
 				})
 			}
