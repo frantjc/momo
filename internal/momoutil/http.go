@@ -19,6 +19,7 @@ import (
 	xslice "github.com/frantjc/x/slice"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/google/uuid"
 	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	"howett.net/plist"
@@ -122,8 +123,9 @@ func handleUpload(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Re
 		}
 
 		var (
-			key      = fmt.Sprintf("%s%s", appName, ext)
-			selector = map[string]string{
+			artifactName = fmt.Sprintf("%s-%s", appName, uuid.NewString()[:5])
+			key          = fmt.Sprintf("%s%s", artifactName, ext)
+			selector     = map[string]string{
 				labelApp: appName,
 			}
 			mobileApp = &momov1alpha1.MobileApp{
@@ -149,9 +151,9 @@ func handleUpload(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Re
 			if err = cli.Create(ctx,
 				&momov1alpha1.APK{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:    namespace,
-						GenerateName: fmt.Sprintf("%s-", appName),
-						Labels:       selector,
+						Namespace: namespace,
+						Name:      artifactName,
+						Labels:    selector,
 					},
 					Spec: momov1alpha1.APKSpec{
 						Bucket: corev1.LocalObjectReference{
@@ -167,9 +169,9 @@ func handleUpload(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Re
 			if err = cli.Create(ctx,
 				&momov1alpha1.IPA{
 					ObjectMeta: metav1.ObjectMeta{
-						Namespace:    namespace,
-						GenerateName: fmt.Sprintf("%s-", appName),
-						Labels:       selector,
+						Namespace: namespace,
+						Name:      artifactName,
+						Labels:    selector,
 					},
 					Spec: momov1alpha1.IPASpec{
 						Bucket: corev1.LocalObjectReference{
@@ -316,13 +318,19 @@ func handleFiles(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Req
 			bucketName = ipa.Bucket.Name
 			contentType = ContentTypeIPA
 		case ".png", ".jpg", ".jpeg":
+			type iconAndBucketName struct {
+				icon       momov1alpha1.AppStatusIcon
+				bucketName string
+			}
+
 			var (
-				findAny = func(_ momov1alpha1.AppStatusIcon, _ int) bool {
+				findAny = func(_ iconAndBucketName, _ int) bool {
 					return true
 				}
-				find = func(icon momov1alpha1.AppStatusIcon, _ int) bool {
-					return strings.TrimSuffix(filepath.Base(icon.Key), filepath.Ext(icon.Key)) == strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+				find = func(icon iconAndBucketName, _ int) bool {
+					return strings.TrimSuffix(filepath.Base(icon.icon.Key), filepath.Ext(icon.icon.Key)) == strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
 				}
+				icons = []iconAndBucketName{}
 			)
 
 			switch ext {
@@ -333,38 +341,47 @@ func handleFiles(scheme *runtime.Scheme) func(w http.ResponseWriter, r *http.Req
 
 				switch file {
 				case "display.png":
-					find = func(icon momov1alpha1.AppStatusIcon, _ int) bool {
-						return icon.Display
+					find = func(icon iconAndBucketName, _ int) bool {
+						return icon.icon.Display
 					}
 				case "full-size.png":
-					find = func(icon momov1alpha1.AppStatusIcon, _ int) bool {
-						return icon.FullSize
+					find = func(icon iconAndBucketName, _ int) bool {
+						return icon.icon.FullSize
 					}
 				}
 			}
 
-			cr0 := &momov1alpha1.IPA{}
+			if ipa.Name != "" {
+				cr := &momov1alpha1.IPA{}
 
-			if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ipa.Name}, cr0); err != nil {
-				return err
+				if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ipa.Name}, cr); err != nil {
+					return err
+				}
+
+				icons = append(icons, xslice.Map(cr.Status.Icons, func(icon momov1alpha1.AppStatusIcon, _ int) iconAndBucketName {
+					return iconAndBucketName{icon: icon, bucketName: cr.Spec.Bucket.Name}
+				})...)
 			}
 
-			cr1 := &momov1alpha1.APK{}
+			if apk.Name != "" {
+				cr := &momov1alpha1.APK{}
 
-			if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: apk.Name}, cr1); err != nil {
-				return err
+				if err = cli.Get(ctx, client.ObjectKey{Namespace: namespace, Name: apk.Name}, cr); err != nil {
+					return err
+				}
+
+				icons = append(icons, xslice.Map(cr.Status.Icons, func(icon momov1alpha1.AppStatusIcon, _ int) iconAndBucketName {
+					return iconAndBucketName{icon: icon, bucketName: cr.Spec.Bucket.Name}
+				})...)
 			}
 
-			icons := cr0.Status.Icons
-			icons = append(icons, cr1.Status.Icons...)
-
-			// TODO: I guess we search all apk and ipa icons?
-			key = xslice.
+			icon := xslice.
 				Coalesce(
 					xslice.Find(icons, find),
 					xslice.Find(icons, findAny),
-				).
-				Key
+				)
+			key = icon.icon.Key
+			bucketName = icon.bucketName
 		default:
 			if file == "manifest.plist" {
 				if ipa.Key == "" {

@@ -89,10 +89,6 @@ github.com/evanphx/json-patch/v5 v5.9.0 h1:kcBlZQbplgElYIlo/n1hJbls2z/1awpXxpRi0
 github.com/evanphx/json-patch/v5 v5.9.0/go.mod h1:VNkHZ/282BpEyt/tObQO8s5CMPmYYq14uClGH4abBuQ=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
-github.com/frantjc/x v0.0.0-20250205025335-17ff01e148ed h1:3JgOh2DE3RuP6pScs17R0MRRvIDE+Tz72Zq0mzBRA4E=
-github.com/frantjc/x v0.0.0-20250205025335-17ff01e148ed/go.mod h1:tddPtloeZsRJ+hPcZlVSgS4rbm9RIuTKfaYv8EMHDlc=
-github.com/frantjc/x v0.0.0-20250217023445-391d79b5fb02 h1:DMIKmmspndhgTyfeHYRt5/DaD0GEdQDqjpYNBvX5X8Q=
-github.com/frantjc/x v0.0.0-20250217023445-391d79b5fb02/go.mod h1:tddPtloeZsRJ+hPcZlVSgS4rbm9RIuTKfaYv8EMHDlc=
 github.com/frantjc/x v0.0.0-20250225205746-368b1b207450 h1:eDaKEBS7QF1f8ifG77udsXka2MJZUjqDjpPv7B3d5Jk=
 github.com/frantjc/x v0.0.0-20250225205746-368b1b207450/go.mod h1:tddPtloeZsRJ+hPcZlVSgS4rbm9RIuTKfaYv8EMHDlc=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=

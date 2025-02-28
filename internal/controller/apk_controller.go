@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,20 @@ import (
 type APKReconciler struct {
 	client.Client
 	record.EventRecorder
+	TmpDir string
+}
+
+const (
+	AnnotationForceUnpack = "momo.frantj.cc/force-unpack"
+)
+
+func shouldForceUnpack(obj client.Object) bool {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	b, _ := strconv.ParseBool(annotations[AnnotationForceUnpack])
+	return b
 }
 
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks,verbs=get;list;watch;create;update;patch;delete
@@ -52,10 +67,6 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 		return ctrl.Result{}, err
 	}
-
-	defer func() {
-		_ = r.Client.Status().Update(ctx, apk)
-	}()
 
 	bucket := &momov1alpha1.Bucket{}
 
@@ -82,13 +93,23 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	if !apk.DeletionTimestamp.IsZero() {
+		if err := cli.Delete(ctx, apk.Spec.Key); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	defer func() {
+		_ = r.Client.Status().Update(ctx, apk)
+	}()
+
 	rc, err := cli.NewReader(ctx, apk.Spec.Key, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	defer rc.Close()
 
-	tmp, err := os.CreateTemp("", "*.apk")
+	tmp, err := os.CreateTemp(r.TmpDir, "*.apk")
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -112,7 +133,9 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if dig.String() == apk.Status.Digest {
+	forceUnpack := shouldForceUnpack(apk)
+
+	if !forceUnpack && dig.String() == apk.Status.Digest {
 		return ctrl.Result{}, nil
 	}
 
@@ -176,6 +199,8 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			ext    = filepath.Ext(hdr.Name)
 			key    = filepath.Join(
 				filepath.Dir(apk.Spec.Key),
+				apk.Namespace,
+				apk.Name,
 				fmt.Sprintf("%s-%dx%d%s",
 					strings.ToLower(strings.TrimSuffix(hdr.Name, ext)),
 					height,
@@ -197,6 +222,12 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	apk.Status.Digest = dig.String()
 	apk.Status.Phase = momov1alpha1.PhaseReady
+	if forceUnpack {
+		delete(apk.Annotations, AnnotationForceUnpack)
+		if err := r.Update(ctx, apk); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }

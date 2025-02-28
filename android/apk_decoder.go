@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -126,21 +125,22 @@ func (a *APKDecoder) SHA256CertFingerprints(ctx context.Context) (string, error)
 	return keytool.Command(a.keytool).SHA256CertFingerprints(ctx, a.Name)
 }
 
+func parseIconName(value string) string {
+	spl := strings.Split(value, "/")
+	return spl[len(spl)-1]
+}
+
 func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
-	if _, err := a.Manifest(ctx); err != nil {
+	manifest, err := a.Manifest(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	var (
-		iconType = "drawable"
-		iconName = "ic_launcher"
-	)
+	iconNames := []string{}
 
-	for _, attr := range a.manifest.Attrs {
-		if attr.Name.Space == "http://schemas.android.com/apk/res/android" && attr.Name.Local == "icon" {
-			iconType, iconName = path.Split(attr.Value)
-			iconType = strings.TrimPrefix(iconType, "@")
-			break
+	for _, attr := range manifest.Application.Attrs {
+		if attr.Name.Space == "http://schemas.android.com/apk/res/android" && xslice.Includes([]string{"icon", "roundIcon"}, attr.Name.Local) {
+			iconNames = append(iconNames, parseIconName(attr.Value))
 		}
 	}
 
@@ -167,7 +167,9 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 				ext  = filepath.Ext(base)
 			)
 
-			if xslice.Includes([]string{".png", ".jpg", ".jpeg"}, ext) && strings.Contains(rel, iconType) && strings.Contains(base, iconName) {
+			if xslice.Includes([]string{".png", ".jpg", ".jpeg"}, ext) && xslice.Some(iconNames, func(iconName string, _ int) bool {
+				return strings.Contains(base, iconName)
+			}) {
 				f, err := os.Open(path)
 				if err != nil {
 					return err
@@ -215,5 +217,5 @@ func (a *APKDecoder) Close() error {
 	a.manifest = nil
 	a.icons = nil
 
-	return os.Remove(a.Name)
+	return nil
 }

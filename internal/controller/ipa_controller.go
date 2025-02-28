@@ -32,6 +32,7 @@ import (
 type IPAReconciler struct {
 	client.Client
 	record.EventRecorder
+	TmpDir string
 }
 
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=ipas,verbs=get;list;watch;create;update;patch;delete
@@ -94,7 +95,7 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 	defer rc.Close()
 
-	tmp, err := os.CreateTemp("", "*.ipa")
+	tmp, err := os.CreateTemp(r.TmpDir, "*.ipa")
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -118,7 +119,8 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
-	if dig.String() == ipa.Status.Digest {
+	forceUnpack := shouldForceUnpack(ipa)
+	if !forceUnpack && dig.String() == ipa.Status.Digest {
 		return ctrl.Result{}, nil
 	}
 
@@ -177,6 +179,7 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			ext = filepath.Ext(hdr.Name)
 			key = filepath.Join(
 				filepath.Dir(ipa.Spec.Key),
+				ipa.Namespace,
 				ipa.Name,
 				fmt.Sprintf("%s-%dx%d%s",
 					strings.ToLower(strings.TrimSuffix(hdr.Name, ext)),
@@ -226,6 +229,12 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	ipa.Status.Digest = dig.String()
 	ipa.Status.Phase = momov1alpha1.PhaseReady
+	if forceUnpack {
+		delete(ipa.Annotations, AnnotationForceUnpack)
+		if err := r.Update(ctx, ipa); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }

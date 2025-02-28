@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -19,6 +22,7 @@ import (
 
 	_ "github.com/928799934/go-png-cgbi"
 	"github.com/frantjc/momo"
+	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/internal/controller"
 	"github.com/frantjc/momo/internal/momoutil"
@@ -33,6 +37,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -98,6 +103,7 @@ func NewEntrypoint() *cobra.Command {
 		NewControl(),
 		NewServe(),
 		NewUpload(),
+		NewGet(),
 	)
 
 	return cmd
@@ -315,21 +321,33 @@ func NewServe() *cobra.Command {
 
 func NewUpload() *cobra.Command {
 	var (
-		addr string
-		cmd  = &cobra.Command{
-			Use:           "upload [flags] (namespace) (bucket) (name) (.ipa|.apk)",
-			Args:          cobra.ExactArgs(4),
+		addr      string
+		namespace string
+		cmd       = &cobra.Command{
+			Use:           "upload [flags] (bucket) (name) (.ipa|.apk)",
+			Args:          cobra.ExactArgs(3),
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				var (
 					ctx        = cmd.Context()
-					namespace  = args[0]
 					bucketName = args[1]
 					appName    = args[2]
 					file       = args[3]
 					cli        = new(momo.Client)
 				)
+
+				if !cmd.Flag("namespace").Changed {
+					var (
+						ok  bool
+						err error
+					)
+					if namespace, ok, err = loadConfig().Namespace(); err != nil {
+						return err
+					} else if !ok {
+						namespace = "default"
+					}
+				}
 
 				f, err := os.Open(file)
 				if err != nil {
@@ -370,6 +388,7 @@ func NewUpload() *cobra.Command {
 		}
 	)
 
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Namespace for the app")
 	cmd.Flags().StringVar(&addr, "addr", "", "listen address for momo")
 
 	return cmd
@@ -400,4 +419,81 @@ func (t *kubeAuthTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	return t.roundTripper.RoundTrip(req)
+}
+
+func loadConfig() clientcmd.ClientConfig {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if _, ok := os.LookupEnv("HOME"); !ok {
+		if u, err := user.Current(); err == nil {
+			loadingRules.Precedence = append(loadingRules.Precedence, filepath.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName))
+		}
+	}
+
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		loadingRules,
+		&clientcmd.ConfigOverrides{},
+	)
+}
+
+func NewGet() *cobra.Command {
+	var (
+		cmd = &cobra.Command{
+			Use: "get",
+		}
+	)
+
+	cmd.AddCommand(NewGetManifest(), NewGetMetadata())
+
+	return cmd
+}
+
+func NewGetManifest() *cobra.Command {
+	var (
+		cmd = &cobra.Command{
+			Use:  "manifest",
+			Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				apk := android.NewAPKDecoder(args[0])
+				defer apk.Close()
+
+				manifest, err := apk.Manifest(cmd.Context())
+				if err != nil {
+					return err
+				}
+
+				enc := xml.NewEncoder(cmd.OutOrStdout())
+				defer enc.Close()
+				enc.Indent("", "  ")
+
+				return enc.Encode(manifest)
+			},
+		}
+	)
+
+	return cmd
+}
+
+func NewGetMetadata() *cobra.Command {
+	var (
+		cmd = &cobra.Command{
+			Use:  "metadata",
+			Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				apk := android.NewAPKDecoder(args[0])
+				defer apk.Close()
+
+				metadata, err := apk.Metadata(cmd.Context())
+				if err != nil {
+					return err
+				}
+
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+
+				return enc.Encode(metadata)
+			},
+		}
+	)
+
+	return cmd
 }

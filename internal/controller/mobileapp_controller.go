@@ -119,7 +119,6 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	mobileApp.Status.IPAs = markLatest(mobileApp.Status.IPAs)
 
-
 	if mobileApp.Spec.UniversalLinks.Ingress.Host != "" {
 		bundleIdentifiers = xslice.Unique(bundleIdentifiers)
 
