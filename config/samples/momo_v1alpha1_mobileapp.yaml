@@ -2,8 +2,11 @@
 apiVersion: momo.frantj.cc/v1alpha1
 kind: MobileApp
 metadata:
-  name: mobileapp-sample
+  name: default
   namespace: default
 spec:
-  bucket:
-    name: default
+  selector:
+    momo.frantj.cc/app: default
+  universalLinks:
+    ingress:
+      host: momo.frantj.cc

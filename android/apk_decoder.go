@@ -16,6 +16,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	ContentTypeAPK = "application/vnd.android.package-archive"
+)
+
 type APKDecoder struct {
 	Name string
 

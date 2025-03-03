@@ -7,9 +7,10 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-.PHONY: help
-help:
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+GO ?= go
+GIT ?= git
+KUBECTL ?= kubectl
+DOCKER ?= docker
 
 .PHONY: manifests
 manifests: controller-gen
@@ -27,14 +28,14 @@ api: generate
 
 .PHONY: fmt vet test
 fmt vet test:
-	@go $@ ./...
+	@$(GO) $@ ./...
 
 .PHONY: download vendor verify
 download vendor verify:
-	@go mod $@
+	@$(GO) mod $@
 
 .PHONY: lint
-lint: golangci-lint
+lint: golangci-lint fmt
 	@$(GOLANGCI_LINT) config verify
 	@$(GOLANGCI_LINT) run --fix
 
@@ -43,27 +44,41 @@ ifndef ignore-not-found
 endif
 
 .PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+install: manifests kustomize
 	@$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
 .PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+uninstall: manifests kustomize
 	@$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	@mkdir -p $(LOCALBIN)
 
+APPA ?= $(LOCALBIN)/appa
+KUBECTL_UPLOAD_APP ?= $(LOCALBIN)/kubectl-upload_app
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
-GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+SWAG ?= $(LOCALBIN)/swag
 
 KUSTOMIZE_VERSION ?= v5.5.0
 CONTROLLER_TOOLS_VERSION ?= v0.17.1
 GOLANGCI_LINT_VERSION ?= v1.63.4
+SWAG_VERSION ?= v1.16.4
+
+.PHONY: appa
+appa: $(APPA)
+$(APPA): $(LOCALBIN)
+	@$(GO) build -o $@ ./cmd/appa
+
+.PHONY: kubectl-upload_app
+kubectl-upload_app: $(KUBECTL_UPLOAD_APP)
+$(KUBECTL_UPLOAD_APP): $(LOCALBIN)
+	@$(GO) build -o $@ ./cmd/kubectl-upload_app
 
 .PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+kustomize: $(KUSTOMIZE)
 $(KUSTOMIZE): $(LOCALBIN)
 	@$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v5,$(KUSTOMIZE_VERSION))
 
@@ -77,16 +92,19 @@ golangci-lint: $(GOLANGCI_LINT)
 $(GOLANGCI_LINT): $(LOCALBIN)
 	@$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
+.PHONY: swag
+swag: $(SWAG)
+$(SWAG): $(LOCALBIN)
+	@$(call go-install-tool,$(SWAG),github.com/swaggo/swag/cmd/swag,$(SWAG_VERSION))
+
 define go-install-tool
-@[ -f "$(1)-$(3)" ] || { \
+@[ -f "$(1)" ] || { \
 set -e; \
 package=$(2)@$(3) ;\
 echo "Downloading $${package}" ;\
 rm -f $(1) || true ;\
-GOBIN=$(LOCALBIN) go install $${package} ;\
-mv $(1) $(1)-$(3) ;\
-} ;\
-ln -sf $(1)-$(3) $(1)
+GOBIN=$(LOCALBIN) $(GO) install $${package} ;\
+} ;
 endef
 
 .PHONY: testdata/momo/node_modules
@@ -96,5 +114,17 @@ testdata/momo/node_modules:
 .PHONY: testdata/momo.apk
 testdata/momo.apk: testdata/momo/node_modules
 	@cd testdata/momo && npm run android
-	@jarsigner -sigalg SHA1withRSA -digestalg SHA1 -storepass android -keypass android -keystore testdata/momo/android/app/debug.keystore testdata/momo/android/app/build/outputs/apk/release/app-release.apk androiddebugkey
 	@cp testdata/momo/android/app/build/outputs/apk/debug/app-debug.apk $@
+	@jarsigner -sigalg SHA1withRSA -digestalg SHA1 -storepass android -keypass android -keystore testdata/momo/android/app/debug.keystore $@ androiddebugkey
+
+.PHONY: internal/api
+internal/api: swag
+	@$(SWAG) fmt --dir $@
+	@$(SWAG) init --dir $@ --output $@ --outputTypes json --parseInternal
+	@echo >> $@/swagger.json
+
+.PHONY: test-upload
+test-upload: appa
+	@$(DOCKER) compose up -d
+	@$(KUBECTL) apply -f config/samples/momo_v1alpha1_bucket.yaml
+	@$(APPA) upload app default testdata/momo.apk

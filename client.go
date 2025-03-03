@@ -1,16 +1,32 @@
 package momo
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+)
 
-	"github.com/frantjc/momo/internal/momoutil"
+const (
+	ExtAPK  = ".apk"
+	ExtIPA  = ".ipa"
+	ExtPNG  = ".png"
+	ExtJPG  = ".jpg"
+	ExtJPEG = ".jpeg"
+)
+
+const (
+	FileManifestPlist = "manifest.plist"
+	FileDisplayIcon   = "display.png"
+	FileFullSizeIcon  = "full-size.png"
+)
+
+const (
+	DefaultPort = 8080
 )
 
 type Client struct {
@@ -24,40 +40,36 @@ func (c *Client) init() error {
 	}
 	if c.BaseURL == nil {
 		var err error
-		c.BaseURL, err = url.Parse("http://localhost:8080/")
+		c.BaseURL, err = url.Parse(fmt.Sprintf("http://localhost:%d/", DefaultPort))
 		return err
 	}
 	return nil
 }
 
-func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType, namespace, bucketName, appName string) error {
+func (c *Client) UploadApp(ctx context.Context, file, namespace, bucketName, appName string) error {
 	if err := c.init(); err != nil {
 		return err
 	}
 
-	doGzip := contentType == momoutil.ContentTypeTar
-
-	if doGzip {
-		pr, pw := io.Pipe()
-
-		go func() {
-			zw := gzip.NewWriter(pw)
-			_, copyErr := io.Copy(zw, body)
-			err := errors.Join(zw.Close(), copyErr)
-			_ = pw.CloseWithError(err)
-		}()
-
-		body = pr
+	f, err := os.Open(file)
+	if err != nil {
+		return err
 	}
+	defer f.Close()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath("/api/v1", namespace, "uploads", bucketName, appName).String(), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath(namespace, "uploads", bucketName, appName).String(), f)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Content-Type", contentType)
-	if doGzip {
-		req.Header.Set("Content-Encoding", "gzip")
+	ext := strings.ToLower(filepath.Ext(file))
+	switch ext {
+	case ExtIPA:
+		req.Header.Set("Content-Type", "application/octet-stream")
+	case ExtAPK:
+		req.Header.Set("Content-Type", "application/vnd.android.package-archive")
+	default:
+		return fmt.Errorf("unrecognized file extension: %s", ext)
 	}
 
 	res, err := c.HTTPClient.Do(req)
@@ -80,30 +92,7 @@ func (c *Client) UploadApp(ctx context.Context, body io.Reader, contentType, nam
 	return nil
 }
 
-func (c *Client) Readyz(ctx context.Context) error {
-	if err := c.init(); err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL.JoinPath("/readyz").String(), nil)
-	if err != nil {
-		return err
-	}
-
-	res, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("http status code %d", res.StatusCode)
-	}
-
-	return nil
-}
-
-func (c *Client) Healthz(ctx context.Context) error {
+func (c *Client) Ping(ctx context.Context) error {
 	if err := c.init(); err != nil {
 		return err
 	}

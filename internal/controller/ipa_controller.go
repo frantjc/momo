@@ -89,6 +89,14 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, err
 	}
 
+	if !ipa.DeletionTimestamp.IsZero() {
+		if err := cli.Delete(ctx, ipa.Spec.Key); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
 	rc, err := cli.NewReader(ctx, ipa.Spec.Key, nil)
 	if err != nil {
 		return ctrl.Result{}, err

@@ -1,3 +1,13 @@
-# More info: https://docs.docker.com/engine/reference/builder/#dockerignore-file
-# Ignore build and test binaries.
+.idea/
+.vscode/
+
 bin/
+
+dist/
+
+.DS_Store
+
+site/
+gh-pages/
+
+.env

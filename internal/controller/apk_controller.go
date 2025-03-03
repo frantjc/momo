@@ -97,6 +97,8 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if err := cli.Delete(ctx, apk.Spec.Key); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		return ctrl.Result{}, nil
 	}
 
 	defer func() {
