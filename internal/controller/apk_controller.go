@@ -51,6 +51,7 @@ func shouldForceUnpack(obj client.Object) bool {
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks/finalizers,verbs=update
+// +kubebuilder:rbac:groups=momo.frantj.cc,resources=buckets,verbs=get;list;watch;
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

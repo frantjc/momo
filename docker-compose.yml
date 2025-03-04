@@ -17,6 +17,8 @@ services:
     command:
       - -VV
       - srv
+      - node
+      - /app/server.js
     volumes:
       - ~/.kube:/root/.kube
     ports:

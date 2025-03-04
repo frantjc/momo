@@ -12,10 +12,6 @@ import (
 )
 
 func NewExecHandlerWithPortFromEnv(ctx context.Context, name string, args ...string) (http.Handler, *exec.Cmd, error) {
-	var (
-		cmd = exec.CommandContext(ctx, name, args...)
-	)
-
 	lis, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		return nil, nil, err
@@ -31,11 +27,14 @@ func NewExecHandlerWithPortFromEnv(ctx context.Context, name string, args ...str
 		return nil, nil, err
 	}
 
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%s", port))
 
 	if err = lis.Close(); err != nil {
 		return nil, nil, err
 	}
 
-	return httputil.NewSingleHostReverseProxy(target), cmd, nil
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httputil.NewSingleHostReverseProxy(target)
+	}), cmd, nil
 }

@@ -109,11 +109,11 @@ endef
 
 .PHONY: testdata/momo/node_modules
 testdata/momo/node_modules:
-	@cd testdata/momo && npm install
+	@cd testdata/momo && yarn
 
 .PHONY: testdata/momo.apk
 testdata/momo.apk: testdata/momo/node_modules
-	@cd testdata/momo && npm run android
+	@cd testdata/momo && yarn android
 	@cp testdata/momo/android/app/build/outputs/apk/debug/app-debug.apk $@
 	@jarsigner -sigalg SHA1withRSA -digestalg SHA1 -storepass android -keypass android -keystore testdata/momo/android/app/debug.keystore $@ androiddebugkey
 

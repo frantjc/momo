@@ -53,6 +53,7 @@ const (
 type Opts struct {
 	Path    string
 	Swagger bool
+	Backend http.Handler
 }
 
 type Opt interface {
@@ -68,13 +69,17 @@ func (o *Opts) Apply(opts *Opts) {
 			if o.Swagger {
 				opts.Swagger = true
 			}
+			if o.Backend != nil {
+				opts.Backend = o.Backend
+			}
 		}
 	}
 }
 
 func newOpts(opts ...Opt) *Opts {
 	o := &Opts{
-		Path: "/",
+		Path:    "/",
+		Backend: http.NotFoundHandler(),
 	}
 
 	for _, opt := range opts {
@@ -150,7 +155,7 @@ func NewHandler(opts ...Opt) (http.Handler, error) {
 		)
 	})
 
-	r.NotFound(http.NotFound)
+	r.NotFound(o.Backend.ServeHTTP)
 
 	return r, h.init()
 }

@@ -7,15 +7,43 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - momo.frantj.cc
   resources:
   - apks
   - buckets
   - ipas
+  - mobileapps
   verbs:
   - create
   - delete
@@ -30,6 +58,7 @@ rules:
   - apks/finalizers
   - buckets/finalizers
   - ipas/finalizers
+  - mobileapps/finalizers
   verbs:
   - update
 - apiGroups:
@@ -38,7 +67,20 @@ rules:
   - apks/status
   - buckets/status
   - ipas/status
+  - mobileapps/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - networking
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

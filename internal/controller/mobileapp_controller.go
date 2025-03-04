@@ -31,6 +31,14 @@ type MobileAppReconciler struct {
 	record.EventRecorder
 }
 
+// +kubebuilder:rbac:groups=momo.frantj.cc,resources=mobileapps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=momo.frantj.cc,resources=mobileapps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=momo.frantj.cc,resources=mobileapps/finalizers,verbs=update
+// +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks;ipas,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

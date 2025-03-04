@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -234,6 +236,30 @@ func NewServe() *cobra.Command {
 					}
 					eg, ctx = errgroup.WithContext(cmd.Context())
 				)
+
+				if len(args) > 0 {
+					var cmd *exec.Cmd
+					opts.Backend, cmd, err = momoutil.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
+					if err != nil {
+						return err
+					}
+
+					// A rough algorithm for making the working directory of
+					// the exec the directory of the entrypoint in the case
+					// of the args being something like `node /app/server.js`.
+					for _, entrypoint := range args[1:] {
+						if fi, err := os.Stat(entrypoint); err == nil {
+							if fi.IsDir() {
+								cmd.Dir = filepath.Clean(entrypoint)
+							} else {
+								cmd.Dir = filepath.Dir(entrypoint)
+							}
+							break
+						}
+					}
+
+					eg.Go(cmd.Run)
+				}
 
 				eg.Go(func() error {
 					return srv.Serve(l)

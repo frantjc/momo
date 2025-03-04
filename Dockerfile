@@ -13,7 +13,7 @@ COPY ios/ ios/
 COPY keytool/ keytool/
 RUN CGO_ENABLED=0 go build -o /momo ./cmd/momo
 
-FROM node:20.11.1-alpine as remix
+FROM node:20.11.1-alpine AS remix
 WORKDIR /src/github.com/frantjc/momo
 COPY package.json yarn.lock ./
 RUN yarn

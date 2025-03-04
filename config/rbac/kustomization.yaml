@@ -22,12 +22,15 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- upload_admin_role.yaml
-- upload_editor_role.yaml
-- upload_viewer_role.yaml
 - bucket_admin_role.yaml
 - bucket_editor_role.yaml
 - bucket_viewer_role.yaml
 - mobileapp_admin_role.yaml
 - mobileapp_editor_role.yaml
 - mobileapp_viewer_role.yaml
+- apk_admin_role.yaml
+- apk_editor_role.yaml
+- apk_viewer_role.yaml
+- ipa_admin_role.yaml
+- ipa_editor_role.yaml
+- ipa_viewer_role.yaml

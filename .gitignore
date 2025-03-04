@@ -15,4 +15,10 @@ dist/
 site/
 gh-pages/
 
+# nodejs
+node_modules/
+
+# remixjs
+build/
+
 .env

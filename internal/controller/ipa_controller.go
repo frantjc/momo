@@ -38,6 +38,7 @@ type IPAReconciler struct {
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=ipas,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=ipas/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=ipas/finalizers,verbs=update
+// +kubebuilder:rbac:groups=momo.frantj.cc,resources=buckets,verbs=get;list;watch
 
 const (
 	imageDisplayPx  = 57
