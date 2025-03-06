@@ -224,25 +224,15 @@ func NewServe() *cobra.Command {
 				}
 				defer l.Close()
 
-				handler, err := api.NewHandler(opts)
-				if err != nil {
-					return err
-				}
-
-				var (
-					srv = &http.Server{
-						ReadHeaderTimeout: time.Second * 5,
-						Handler:           handler,
-					}
-					eg, ctx = errgroup.WithContext(cmd.Context())
-				)
+				eg, ctx := errgroup.WithContext(cmd.Context())
 
 				if len(args) > 0 {
-					var cmd *exec.Cmd
-					opts.Backend, cmd, err = momoutil.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
+					var ex *exec.Cmd
+					opts.Backend, ex, err = momoutil.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
 					if err != nil {
 						return err
 					}
+					ex.Stdout = cmd.OutOrStdout()
 
 					// A rough algorithm for making the working directory of
 					// the exec the directory of the entrypoint in the case
@@ -250,15 +240,25 @@ func NewServe() *cobra.Command {
 					for _, entrypoint := range args[1:] {
 						if fi, err := os.Stat(entrypoint); err == nil {
 							if fi.IsDir() {
-								cmd.Dir = filepath.Clean(entrypoint)
+								ex.Dir = filepath.Clean(entrypoint)
 							} else {
-								cmd.Dir = filepath.Dir(entrypoint)
+								ex.Dir = filepath.Dir(entrypoint)
 							}
 							break
 						}
 					}
 
-					eg.Go(cmd.Run)
+					eg.Go(ex.Run)
+				}
+
+				handler, err := api.NewHandler(opts)
+				if err != nil {
+					return err
+				}
+
+				srv := &http.Server{
+					ReadHeaderTimeout: time.Second * 5,
+					Handler:           handler,
 				}
 
 				eg.Go(func() error {

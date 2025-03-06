@@ -77,10 +77,7 @@ func (o *Opts) Apply(opts *Opts) {
 }
 
 func newOpts(opts ...Opt) *Opts {
-	o := &Opts{
-		Path:    "/",
-		Backend: http.NotFoundHandler(),
-	}
+	o := &Opts{Backend: http.NotFoundHandler()}
 
 	for _, opt := range opts {
 		opt.Apply(o)
@@ -119,7 +116,7 @@ func NewHandler(opts ...Opt) (http.Handler, error) {
 	r.Route(path.Join("/", h.Path), func(r chi.Router) {
 		if o.Swagger {
 			r.Route("/swagger", func(r chi.Router) {
-				r.Get("/", http.RedirectHandler("/swagger/index.html", http.StatusMovedPermanently).ServeHTTP)
+				r.Get("/", http.RedirectHandler(path.Join("/", h.Path, "swagger/index.html"), http.StatusMovedPermanently).ServeHTTP)
 
 				r.Get("/doc.json", func(w http.ResponseWriter, r *http.Request) {
 					_, _ = w.Write(swaggerJSON)
@@ -193,6 +190,12 @@ func negotiate(w http.ResponseWriter, r *http.Request, contentType string) error
 
 	return nil
 }
+
+type Error struct {
+	Message string `json:"error,omitempty"`
+}
+
+type App struct{}
 
 // @Summary	Upload a mobile app
 // @Tags		upload
@@ -345,7 +348,6 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) error {
 // @Failure	500
 // @Router		/{namespace}/manifests/{app} [get]
 // @Router		/{namespace}/manifests/{app}/{version} [get]
-
 func (h *handler) handleManifests(w http.ResponseWriter, r *http.Request) error {
 	cli, err := h.newClient(nil)
 	if err != nil {

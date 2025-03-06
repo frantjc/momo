@@ -34,7 +34,5 @@ func NewExecHandlerWithPortFromEnv(ctx context.Context, name string, args ...str
 		return nil, nil, err
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		httputil.NewSingleHostReverseProxy(target)
-	}), cmd, nil
+	return httputil.NewSingleHostReverseProxy(target), cmd, nil
 }

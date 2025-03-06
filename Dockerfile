@@ -40,6 +40,7 @@ ADD https://raw.githubusercontent.com/iBotPeaches/Apktool/v2.9.3/scripts/linux/a
 RUN sed -i 's|#!/bin/bash|#!/bin/sh|g' /usr/local/bin/apktool \
   && chmod +x /usr/local/bin/*
 ENTRYPOINT ["/usr/local/bin/momo"]
+ENV NODE_ENV production
 COPY server.js package.json /app/
 COPY --from=remix /src/github.com/frantjc/momo/build /app/build/
 COPY --from=remix /src/github.com/frantjc/momo/node_modules /app/node_modules/
