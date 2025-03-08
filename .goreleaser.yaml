@@ -51,3 +51,12 @@ dockers:
       - ghcr.io/frantjc/momo:{{ .Major }}.{{ .Minor }}
       - ghcr.io/frantjc/momo:{{ .Major }}
       - ghcr.io/frantjc/momo:latest
+    extra_files:
+      - app/
+      - public/
+      - package.json
+      - postcss.config.js
+      - server.js
+      - tsconfig.json
+      - vite.config.ts
+      - yarn.lock
