@@ -51,9 +51,9 @@ const (
 )
 
 type Opts struct {
-	Path    string
-	Swagger bool
-	Backend http.Handler
+	Path     string
+	Swagger  bool
+	Fallback http.Handler
 }
 
 type Opt interface {
@@ -69,15 +69,15 @@ func (o *Opts) Apply(opts *Opts) {
 			if o.Swagger {
 				opts.Swagger = true
 			}
-			if o.Backend != nil {
-				opts.Backend = o.Backend
+			if o.Fallback != nil {
+				opts.Fallback = o.Fallback
 			}
 		}
 	}
 }
 
 func newOpts(opts ...Opt) *Opts {
-	o := &Opts{Backend: http.NotFoundHandler()}
+	o := &Opts{Fallback: http.NotFoundHandler()}
 
 	for _, opt := range opts {
 		opt.Apply(o)
@@ -115,30 +115,28 @@ func NewHandler(opts ...Opt) (http.Handler, error) {
 
 	r.Route(path.Join("/", h.Path), func(r chi.Router) {
 		if o.Swagger {
-			r.Route("/swagger", func(r chi.Router) {
-				r.Get("/", http.RedirectHandler(path.Join("/", h.Path, "swagger/index.html"), http.StatusMovedPermanently).ServeHTTP)
+			r.Get("/", http.RedirectHandler(path.Join("/", h.Path, "swagger/index.html"), http.StatusMovedPermanently).ServeHTTP)
 
-				r.Get("/doc.json", func(w http.ResponseWriter, r *http.Request) {
-					_, _ = w.Write(swaggerJSON)
-				})
-
-				r.Get("/*", swagger.Handler())
+			r.Get("/doc.json", func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write(swaggerJSON)
 			})
+
+			r.Get("/*", swagger.Handler())
 		}
 
 		r.Post(
-			fmt.Sprintf("/%s/uploads/%s/%s", paramNamespace, paramBucket, paramApp),
+			fmt.Sprintf("/%s/upload/%s/%s", paramNamespace, paramBucket, paramApp),
 			handleErr(h.handleUpload),
 		)
 
 		r.Get(
-			fmt.Sprintf("/%s/manifests/%s", paramNamespace, paramApp),
-			handleErr(h.handleManifests),
+			fmt.Sprintf("/%s/install/%s", paramNamespace, paramApp),
+			handleErr(h.handleInstall),
 		)
 
 		r.Get(
-			fmt.Sprintf("/%s/manifests/%s/%s", paramNamespace, paramApp, paramVersion),
-			handleErr(h.handleManifests),
+			fmt.Sprintf("/%s/install/%s/%s", paramNamespace, paramApp, paramVersion),
+			handleErr(h.handleInstall),
 		)
 
 		r.Get(
@@ -150,9 +148,19 @@ func NewHandler(opts ...Opt) (http.Handler, error) {
 			fmt.Sprintf("/%s/files/%s/%s/%s", paramNamespace, paramApp, paramVersion, paramFile),
 			handleErr(h.handleFiles),
 		)
+
+		r.Get(
+			fmt.Sprintf("/%s/apps", paramNamespace),
+			handleErr(h.handleApps),
+		)
+
+		r.Get(
+			fmt.Sprintf("/%s/apps/%s", paramNamespace, paramApp),
+			handleErr(h.handleApp),
+		)
 	})
 
-	r.NotFound(o.Backend.ServeHTTP)
+	r.NotFound(o.Fallback.ServeHTTP)
 
 	return r, h.init()
 }
@@ -166,7 +174,7 @@ func handleErr(handler func(w http.ResponseWriter, r *http.Request) error) http.
 			}
 
 			w.WriteHeader(httpStatusCode(err))
-			_ = respondJSON(w, r, map[string]string{"error": err.Error()}, wantsPretty(r))
+			_ = respondJSON(w, r, &Error{Message: err.Error()})
 		}
 	}
 }
@@ -177,16 +185,18 @@ func negotiate(w http.ResponseWriter, r *http.Request, contentType string) error
 		return newHTTPStatusCodeError(err, http.StatusUnsupportedMediaType)
 	}
 
-	if acceptEncoding := r.Header.Get("Accept-Encoding"); acceptEncoding != "" && xslice.Every([]string{"identity", "*"}, func(s string, _ int) bool {
-		return !strings.Contains(acceptEncoding, s)
-	}) {
-		w.Header().Set("Accept-Encoding", "identity")
-		return newHTTPStatusCodeError(fmt.Errorf("cannot satisfy Accept-Encoding: %s", acceptEncoding), http.StatusNotAcceptable)
-	}
+	w.Header().Set("Vary", "Accept")
+
+	// if acceptEncoding := r.Header.Get("Accept-Encoding"); acceptEncoding != "" && xslice.Every([]string{"identity", "*"}, func(s string, _ int) bool {
+	// 	return !strings.Contains(acceptEncoding, s)
+	// }) {
+	// 	w.Header().Set("Accept-Encoding", "identity")
+	// 	return newHTTPStatusCodeError(fmt.Errorf("cannot satisfy Accept-Encoding: %s", acceptEncoding), http.StatusNotAcceptable)
+	// }
+
+	// w.Header().Add("Vary", "Accept-Encoding")
 
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Vary", "Accept")
-	w.Header().Add("Vary", "Accept-Encoding")
 
 	return nil
 }
@@ -195,7 +205,13 @@ type Error struct {
 	Message string `json:"error,omitempty"`
 }
 
-type App struct{}
+type App struct {
+	Name string `json:"name,omitempty"`
+}
+
+func appFromMobileApp(mobileApp momov1alpha1.MobileApp) *App {
+	return &App{Name: mobileApp.Name}
+}
 
 // @Summary	Upload a mobile app
 // @Tags		upload
@@ -204,17 +220,17 @@ type App struct{}
 // @Accept		application/x-tar
 // @Accept		application/octet-stream
 // @Accept		application/vnd.android.package-archive
-// @Accept application/gzip
-// @Accept application/x-gtar
-// @Accept application/x-tgz
-// @Param		namespace	path	string	true	"Namespace"
-// @Param		bucket		path	string	true	"Bucket"
-// @Param		app			path	string	true	"App"
-// @Success	201
+// @Accept		application/gzip
+// @Accept		application/x-gtar
+// @Accept		application/x-tgz
+// @Param		namespace	path		string	true	"Namespace"
+// @Param		bucket		path		string	true	"Bucket"
+// @Param		app			path		string	true	"App"
+// @Success	201			{object}	App
 // @Success	307
-// @Failure	406
-// @Failure	415
-// @Failure	500
+// @Failure	406	{object}	Error
+// @Failure	415	{object}	Error
+// @Failure	500	{object}	Error
 // @Router		/{namespace}/uploads/{bucket}/{app} [post]
 func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) error {
 	cli, err := h.newClient(r)
@@ -333,22 +349,25 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) error {
 
 	w.WriteHeader(http.StatusCreated)
 
+	if err := respondJSON(w, r, appFromMobileApp(*mobileApp)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// @Summary	Get an
-// @Tags		manifests
+// @Summary	Install an iOS app
+// @Tags		install
 // @Produce	json
 // @Param		namespace	path	string	true	"Namespace"
 // @Param		app			path	string	true	"App"
 // @Param		version		path	string	false	"Version"
-// @Success	200
 // @Success	301
-// @Failure	404
-// @Failure	500
-// @Router		/{namespace}/manifests/{app} [get]
-// @Router		/{namespace}/manifests/{app}/{version} [get]
-func (h *handler) handleManifests(w http.ResponseWriter, r *http.Request) error {
+// @Failure	404	{object}	Error
+// @Failure	500	{object}	Error
+// @Router		/{namespace}/install/{app} [get]
+// @Router		/{namespace}/install/{app}/{version} [get]
+func (h *handler) handleInstall(w http.ResponseWriter, r *http.Request) error {
 	cli, err := h.newClient(nil)
 	if err != nil {
 		return err
@@ -627,7 +646,6 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 
 	switch ext {
 	case momo.ExtJPG, momo.ExtJPEG:
-
 		img, _, err := image.Decode(rc)
 		if err != nil {
 			return err
@@ -650,6 +668,85 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if _, err := io.Copy(w, rc); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// @Summary	List apps
+// @Tags		apps
+// @Produce	json
+// @Param		namespace	path		string	true	"Namespace"
+// @Success	200			{object}	[]App
+// @Failure	404			{object}	Error
+// @Failure	500			{object}	Error
+// @Router		/{namespace}/apps [get]
+func (h *handler) handleApps(w http.ResponseWriter, r *http.Request) error {
+	cli, err := h.newClient(nil)
+	if err != nil {
+		return err
+	}
+
+	var (
+		namespace  = chi.URLParam(r, "namespace")
+		cont       = r.URL.Query().Get("continue")
+		limit, _   = strconv.Atoi(r.URL.Query().Get("limit"))
+		mobileApps = &momov1alpha1.MobileAppList{}
+	)
+
+	if limit <= 0 {
+		limit = 10
+	}
+
+	if err := cli.List(r.Context(),
+		mobileApps,
+		&client.ListOptions{
+			Namespace: namespace,
+			Limit:     int64(limit),
+			Continue:  cont,
+		},
+	); err != nil {
+		return err
+	}
+
+	apps := xslice.Map(mobileApps.Items, func(mobileApp momov1alpha1.MobileApp, _ int) App {
+		return *appFromMobileApp(mobileApp)
+	})
+
+	if err := respondJSON(w, r, apps); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// @Summary	Get an app
+// @Tags		apps
+// @Produce	json
+// @Param		namespace	path		string	true	"Namespace"
+// @Param		app			path		string	true	"App"
+// @Success	200			{object}	App
+// @Failure	404			{object}	Error
+// @Failure	500			{object}	Error
+// @Router		/{namespace}/apps/{app} [get]
+func (h *handler) handleApp(w http.ResponseWriter, r *http.Request) error {
+	cli, err := h.newClient(nil)
+	if err != nil {
+		return err
+	}
+
+	var (
+		namespace = chi.URLParam(r, "namespace")
+		appName   = chi.URLParam(r, "app")
+		mobileApp = &momov1alpha1.MobileApp{}
+	)
+
+	if err := cli.Get(r.Context(), client.ObjectKey{Namespace: namespace, Name: appName}, mobileApp); err != nil {
+		return err
+	}
+
+	if err := respondJSON(w, r, appFromMobileApp(*mobileApp)); err != nil {
 		return err
 	}
 
@@ -700,13 +797,13 @@ func urlFromReq(r *http.Request) (*url.URL, error) {
 	return url.Parse(fmt.Sprintf("%s://%s", scheme, host))
 }
 
-func respondJSON(w http.ResponseWriter, r *http.Request, a any, pretty bool) error {
+func respondJSON(w http.ResponseWriter, r *http.Request, a any) error {
 	if err := negotiate(w, r, "application/json"); err != nil {
 		return err
 	}
 
 	enc := json.NewEncoder(w)
-	if pretty {
+	if wantsPretty(r) {
 		enc.SetIndent("", "  ")
 	}
 

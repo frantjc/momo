@@ -228,11 +228,10 @@ func NewServe() *cobra.Command {
 
 				if len(args) > 0 {
 					var ex *exec.Cmd
-					opts.Backend, ex, err = momoutil.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
+					opts.Fallback, ex, err = momoutil.NewExecHandlerWithPortFromEnv(ctx, args[0], args[1:]...)
 					if err != nil {
 						return err
 					}
-					ex.Stdout = cmd.OutOrStdout()
 
 					// A rough algorithm for making the working directory of
 					// the exec the directory of the entrypoint in the case
@@ -259,6 +258,9 @@ func NewServe() *cobra.Command {
 				srv := &http.Server{
 					ReadHeaderTimeout: time.Second * 5,
 					Handler:           handler,
+					BaseContext: func(_ net.Listener) context.Context {
+						return context.WithoutCancel(cmd.Context())
+					},
 				}
 
 				eg.Go(func() error {
@@ -267,9 +269,7 @@ func NewServe() *cobra.Command {
 
 				eg.Go(func() error {
 					<-ctx.Done()
-					cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second*30)
-					defer cancel()
-					if err = srv.Shutdown(cctx); err != nil {
+					if err = srv.Shutdown(context.WithoutCancel(ctx)); err != nil {
 						return err
 					}
 					return ctx.Err()

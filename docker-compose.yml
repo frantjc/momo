@@ -16,7 +16,7 @@ services:
     build: .
     command:
       - -VV
-      - --path=/api
+      - --path=/api/v1
       - srv
       - node
       - /app/server.js
