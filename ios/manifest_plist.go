@@ -6,6 +6,12 @@ import (
 	_ "howett.net/plist"
 )
 
+const (
+	SchemeITMSServices = "itms-services"
+	ContentTypeIPA     = "application/octet-stream"
+	ContentTypePlist   = "application/xml"
+)
+
 type Manifest struct {
 	Items []ManifestItem `plist:"items"`
 }

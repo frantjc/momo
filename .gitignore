@@ -1,23 +1,24 @@
-# macOS
-.DS_Store
-
-# iOS
-Payload/
-
 # IDE
+.idea/
 .vscode/
+
+# make
+bin/
 
 # goreleaser
 dist/
 
-# go
-vendor/
+# macOS
+.DS_Store
 
-# node
+# mkdocs
+site/
+gh-pages/
+
+# nodejs
 node_modules/
 
-# remix
-.cache/
+# remixjs
 build/
 
-hack/
+.env

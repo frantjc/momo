@@ -1,29 +1,46 @@
-version: "3.4"
-
 services:
-  momo:
-    image: ghcr.io/frantjc/momo
-    build:
-      dockerfile: dev.Dockerfile
-      context: .
-    ports:
-      - 8080:8080
-    working_dir: /src
-    volumes:
-      - ./:/src
+  momo-ctrl:
+    build: .
     command:
       - -VV
-      - --db=postgres://postgres:postgres@postgres?sslmode=disable
-      - --blob=file:///var/lib/momo
-      - --
-      - yarn
-      - node
-      - scripts/compose.js
-    depends_on:
-      - postgres
-  postgres:
-    image: postgres:alpine
-    ports:
-      - 5432:5432
+      - ctrl
+    volumes:
+      - ~/.kube:/root/.kube
     environment:
-      POSTGRES_PASSWORD: postgres
+      AWS_ACCESS_KEY_ID: momominio
+      AWS_SECRET_ACCESS_KEY: momominio
+      AWS_REGION: us-east-1
+    depends_on:
+      - minio
+  momo-srv:
+    build: .
+    command:
+      - -VV
+      - --path=/api/v1
+      - srv
+      - node
+      - /app/server.js
+    volumes:
+      - ~/.kube:/root/.kube
+    ports:
+      - 8080:8080
+    environment:
+      AWS_ACCESS_KEY_ID: momominio
+      AWS_SECRET_ACCESS_KEY: momominio
+      AWS_REGION: us-east-1
+    depends_on:
+      - minio
+  minio:
+    image: minio/minio
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /data/default
+        minio server /data --console-address ":9001"
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: momominio
+      MINIO_ROOT_PASSWORD: momominio

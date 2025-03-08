@@ -1,0 +1,12 @@
+---
+apiVersion: momo.frantj.cc/v1alpha1
+kind: MobileApp
+metadata:
+  name: default
+  namespace: default
+spec:
+  selector:
+    momo.frantj.cc/app: default
+  universalLinks:
+    ingress:
+      host: momo.frantj.cc

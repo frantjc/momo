@@ -1,12 +1,32 @@
 name: CI
 on:
+  workflow_dispatch: {}
   push:
     branches:
       - main
-permissions:
-  contents: read
-  packages: write
+  pull_request:
+    branches:
+      - main
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+      - name: Run tests
+        run: |
+          make test
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+      # TODO: Uncomment.
+      # - uses: golangci/golangci-lint-action@v6.2.0
   build:
     runs-on: ubuntu-latest
     steps:
@@ -17,47 +37,4 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          push: true
-          tags: |
-            ghcr.io/frantjc/momo:${{ github.sha }}
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-    container: ghcr.io/frantjc/momo:${{ github.sha }}
-    services:
-      postgres:
-        image: postgres:alpine
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-      momo:
-        image: ghcr.io/frantjc/momo:${{ github.sha }}
-        ports:
-          - 8080:8080
-        env:
-          MOMO_DB_URL: postgres://postgres:postgres@postgres?sslmode=disable
-          MOMO_VERBOSE: "1"
-        options: >-
-          --health-cmd momo_isready
-    steps:
-      - run: |
-          momo --version
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/delete-ghcr-images
-        with:
-          token: ${{ secrets.PAT }}
-          tags: |
-            ghcr.io/frantjc/momo:${{ github.sha }}
-      - name: Run momo upload app
-        run: |
-          momo upload app --url http://momo:8080/ test testdata/test.apk testdata/test.ipa
-          sleep 9
-      - name: Run momo get apps
-        run: |
-          momo get apps --url http://momo:8080/
-      - name: Run momo get app
-        run: |
-          momo get app --url http://momo:8080/ test
+          load: true

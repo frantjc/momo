@@ -6,17 +6,11 @@
 
 import { PassThrough } from "node:stream";
 
-import { CacheProvider } from "@emotion/react";
-import createEmotionServer from "@emotion/server/create-instance";
 import type { AppLoadContext, EntryContext } from "@remix-run/node";
 import { createReadableStreamFromReadable } from "@remix-run/node";
 import { RemixServer } from "@remix-run/react";
 import { isbot } from "isbot";
-import { renderToString, renderToPipeableStream } from "react-dom/server";
-
-import { ServerStyleContext } from "~/context";
-import createEmotionCache from "~/create_emotion_cache";
-import { Themed } from "~/theme";
+import { renderToPipeableStream } from "react-dom/server";
 
 const ABORT_DELAY = 5_000;
 
@@ -30,7 +24,7 @@ export default function handleRequest(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   loadContext: AppLoadContext
 ) {
-  return isbot(request.headers.get("User-Agent") || "")
+  return isbot(request.headers.get("user-agent") || "")
     ? handleBotRequest(
         request,
         responseStatusCode,
@@ -101,35 +95,14 @@ function handleBrowserRequest(
   responseHeaders: Headers,
   remixContext: EntryContext
 ) {
-  const cache = createEmotionCache();
-  const { extractCriticalToChunks } = createEmotionServer(cache);
-
-  const html = renderToString(
-    <ServerStyleContext.Provider value={null}>
-      <CacheProvider value={cache}>
-        <Themed>
-          <RemixServer context={remixContext} url={request.url} />
-        </Themed>
-      </CacheProvider>
-    </ServerStyleContext.Provider>,
-  );
-
-  const chunks = extractCriticalToChunks(html);
-
   return new Promise((resolve, reject) => {
     let shellRendered = false;
     const { pipe, abort } = renderToPipeableStream(
-      <ServerStyleContext.Provider value={chunks.styles}>
-        <CacheProvider value={cache}>
-          <Themed>
-            <RemixServer
-              context={remixContext}
-              url={request.url}
-              abortDelay={ABORT_DELAY}
-            />
-          </Themed>
-        </CacheProvider>
-      </ServerStyleContext.Provider>,
+      <RemixServer
+        context={remixContext}
+        url={request.url}
+        abortDelay={ABORT_DELAY}
+      />,
       {
         onShellReady() {
           shellRendered = true;

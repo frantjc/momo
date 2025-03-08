@@ -1,7 +1,32 @@
+version: 2
 builds:
+  - main: ./cmd/appa
+    id: appa
+    binary: appa
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+    hooks:
+      post:
+        - upx {{ .Path }}
+  - main: ./cmd/kubectl-upload_app
+    id: kubectl-upload_app
+    binary: kubectl-upload_app
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+    hooks:
+      post:
+        - upx {{ .Path }}
   - main: ./cmd/momo
-    ldflags:
-      - -s -w -X github.com/frantjc/momo.VersionCore={{ .RawVersion }}
+    id: momo
+    binary: momo
     env:
       - CGO_ENABLED=0
     goos:

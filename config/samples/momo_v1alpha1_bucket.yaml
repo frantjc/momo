@@ -1,0 +1,8 @@
+---
+apiVersion: momo.frantj.cc/v1alpha1
+kind: Bucket
+metadata:
+  name: default
+  namespace: default
+spec:
+  url: s3://default?endpoint=http://minio:9000&disable_https=true&use_path_style=true

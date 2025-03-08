@@ -3,29 +3,16 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
+	_ "github.com/928799934/go-png-cgbi"
 	"github.com/frantjc/momo/command"
 	xos "github.com/frantjc/x/os"
-
-	// Register these formats in pkg
-	// `image` for decoding.
-	_ "image/jpeg"
-	_ "image/png"
-	_ "golang.org/x/image/webp"
-
-	// Register these schemes in pkg
-	// `gocloud.dev/blob`.
 	_ "gocloud.dev/blob/fileblob"
-	_ "gocloud.dev/blob/memblob"
 	_ "gocloud.dev/blob/s3blob"
-
-	// Register these schemes in pkg
-	// `gocloud.dev/pubsub`.
-	_ "gocloud.dev/pubsub/mempubsub"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 func main() {
@@ -34,10 +21,11 @@ func main() {
 		err       error
 	)
 
-	if err = command.NewMomo().ExecuteContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		fmt.Fprintln(os.Stderr, err.Error())
+	if err = command.SetCommon(command.NewMomo(), SemVer()).ExecuteContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		os.Stderr.WriteString(err.Error() + "\n")
+		stop()
+		xos.ExitFromError(err)
 	}
 
 	stop()
-	xos.ExitFromError(err)
 }

@@ -1,0 +1,10 @@
+---
+apiVersion: momo.frantj.cc/v1alpha1
+kind: APK
+metadata:
+  name: default
+  namespace: default
+spec:
+  bucket:
+    name: default
+  key: default.ipa
