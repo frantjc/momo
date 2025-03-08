@@ -92,7 +92,7 @@ func reqToApp(req *http.Request, opts ...fileOpt) (io.ReadCloser, string, error)
 			Closer: rc,
 		}, mediaType, nil
 	case "application/tar", "application/x-tar":
-		r, mediaType, err := tarToApp(rc)
+		r, mediaType, err := tarToApp(rc, opts...)
 		if err != nil {
 			return nil, "", err
 		}
@@ -107,7 +107,7 @@ func reqToApp(req *http.Request, opts ...fileOpt) (io.ReadCloser, string, error)
 			return nil, "", err
 		}
 
-		r, mediaType, err := tarToApp(zr)
+		r, mediaType, err := tarToApp(zr, opts...)
 		if err != nil {
 			return nil, "", err
 		}
