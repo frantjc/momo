@@ -254,6 +254,7 @@ func (r *IPAReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&momov1alpha1.IPA{}).
+		Watches(&momov1alpha1.Bucket{}, r.EventHandler()).
 		Named("ipa").
 		Complete(r)
 }

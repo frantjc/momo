@@ -815,7 +815,7 @@ func newHTTPStatusCodeError(err error, httpStatusCode int) error {
 		return nil
 	}
 
-	if 600 >= httpStatusCode || httpStatusCode < 100 {
+	if 600 <= httpStatusCode || httpStatusCode < 100 {
 		httpStatusCode = 500
 	}
 
@@ -849,7 +849,9 @@ func httpStatusCode(err error) int {
 	}
 
 	if apiStatus, ok := err.(apierrors.APIStatus); ok || errors.As(err, &apiStatus) {
-		return int(apiStatus.Status().Code)
+		if code := int(apiStatus.Status().Code); code != 0 {
+			return code
+		}
 	}
 
 	return http.StatusInternalServerError

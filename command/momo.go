@@ -140,7 +140,7 @@ func NewControl() *cobra.Command {
 					WebhookServer:                 webhookServer,
 					HealthProbeBindAddress:        probeAddr,
 					LeaderElection:                enableLeaderElection,
-					LeaderElectionID:              "dfc6d68d.frantj.cc",
+					LeaderElectionID:              "dfc6d68d.momo.frantj.cc",
 					LeaderElectionReleaseOnCancel: true,
 				})
 				if err != nil {
