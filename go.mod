@@ -1,7 +1,8 @@
 module github.com/frantjc/momo
 
-go 1.23.0
-toolchain go1.24.1
+go 1.24
+
+toolchain go1.24.2
 
 godebug default=go1.23
 
