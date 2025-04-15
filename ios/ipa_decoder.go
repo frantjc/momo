@@ -104,7 +104,9 @@ func (i *IPADecoder) Icons(_ context.Context) (io.Reader, error) {
 					if err != nil {
 						return err
 					}
-					defer fsf.Close()
+					defer func() {
+						_ = fsf.Close()
+					}()
 
 					fi, err := fsf.Stat()
 					if err != nil {

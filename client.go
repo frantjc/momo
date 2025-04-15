@@ -55,7 +55,9 @@ func (c *Client) UploadApp(ctx context.Context, file, namespace, bucketName, app
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath(namespace, "uploads", bucketName, appName).String(), f)
 	if err != nil {
@@ -76,7 +78,9 @@ func (c *Client) UploadApp(ctx context.Context, file, namespace, bucketName, app
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
 	if res.StatusCode != http.StatusCreated {
 		body := map[string]string{}
@@ -106,7 +110,9 @@ func (c *Client) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() {
+		_ = res.Body.Close()
+	}()
 
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("http status code %d", res.StatusCode)

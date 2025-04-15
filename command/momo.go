@@ -222,7 +222,9 @@ func NewServe() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				defer l.Close()
+				defer func() {
+					_ = l.Close()
+				}()
 
 				eg, ctx := errgroup.WithContext(cmd.Context())
 
@@ -306,7 +308,9 @@ func NewUnpackManifest() *cobra.Command {
 			Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				apk := android.NewAPKDecoder(args[0])
-				defer apk.Close()
+				defer func() {
+					_ = apk.Close()
+				}()
 
 				manifest, err := apk.Manifest(cmd.Context())
 				if err != nil {
@@ -314,7 +318,9 @@ func NewUnpackManifest() *cobra.Command {
 				}
 
 				enc := xml.NewEncoder(cmd.OutOrStdout())
-				defer enc.Close()
+				defer func() {
+					_ = enc.Close()
+				}()
 				enc.Indent("", "  ")
 
 				return enc.Encode(manifest)
@@ -332,7 +338,9 @@ func NewUnpackMetadata() *cobra.Command {
 			Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				apk := android.NewAPKDecoder(args[0])
-				defer apk.Close()
+				defer func() {
+					_ = apk.Close()
+				}()
 
 				metadata, err := apk.Metadata(cmd.Context())
 				if err != nil {

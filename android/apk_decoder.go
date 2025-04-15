@@ -119,7 +119,9 @@ func (a *APKDecoder) Metadata(ctx context.Context) (*apktool.Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	a.metadata = &apktool.Metadata{}
 	return a.metadata, yaml.NewDecoder(f).Decode(a.metadata)
@@ -178,7 +180,9 @@ func (a *APKDecoder) Icons(ctx context.Context) (io.Reader, error) {
 				if err != nil {
 					return err
 				}
-				defer f.Close()
+				defer func() {
+					_ = f.Close()
+				}()
 
 				fi, err := d.Info()
 				if err != nil {

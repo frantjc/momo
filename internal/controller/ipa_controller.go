@@ -69,7 +69,7 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if err := r.Get(ctx,
 		client.ObjectKey{
-			Namespace: ipa.ObjectMeta.Namespace,
+			Namespace: ipa.Namespace,
 			Name:      ipa.Spec.Bucket.Name,
 		},
 		bucket,
@@ -102,14 +102,20 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 
 	tmp, err := os.CreateTemp(r.TmpDir, "*.ipa")
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
+	defer func() {
+		_ = os.Remove(tmp.Name())
+	}()
+	defer func() {
+		_ = tmp.Close()
+	}()
 
 	if _, err := io.Copy(tmp, rc); err != nil {
 		return ctrl.Result{}, err
@@ -136,7 +142,9 @@ func (r *IPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	ipa.Status.Phase = momov1alpha1.PhasePending
 
 	ipaDecoder := ios.NewIPADecoder(tmp.Name())
-	defer ipaDecoder.Close()
+	defer func() {
+		_ = ipaDecoder.Close()
+	}()
 
 	info, err := ipaDecoder.Info(ctx)
 	if err != nil {
@@ -263,7 +271,7 @@ func (r *IPAReconciler) EventHandler() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
 		ipas := &momov1alpha1.IPAList{}
 
-		if err := r.Client.List(ctx, ipas, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+		if err := r.List(ctx, ipas, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
 			return []ctrl.Request{}
 		}
 

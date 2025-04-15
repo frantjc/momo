@@ -329,11 +329,11 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 
-		ingress.ObjectMeta.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
+		ingress.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
 
 		if _, err := controllerutil.CreateOrUpdate(ctx, r, ingress, func() error {
 			ingress.Spec = ingressSpec
-			ingress.ObjectMeta.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
+			ingress.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
 			return controllerutil.SetOwnerReference(mobileApp, ingress, r.Scheme())
 		}); err != nil {
 			return ctrl.Result{}, err
@@ -383,7 +383,7 @@ func (r *MobileAppReconciler) EventHandler() handler.EventHandler {
 		if lbls := obj.GetLabels(); lbls != nil {
 			mobileApps := &momov1alpha1.MobileAppList{}
 
-			if err := r.Client.List(ctx, mobileApps, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+			if err := r.List(ctx, mobileApps, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
 				return []ctrl.Request{}
 			}
 

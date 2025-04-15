@@ -73,7 +73,7 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if err := r.Get(ctx,
 		client.ObjectKey{
-			Namespace: apk.ObjectMeta.Namespace,
+			Namespace: apk.Namespace,
 			Name:      apk.Spec.Bucket.Name,
 		},
 		bucket,
@@ -110,14 +110,20 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 
 	tmp, err := os.CreateTemp(r.TmpDir, "*.apk")
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
+	defer func() {
+		_ = os.Remove(tmp.Name())
+	}()
+	defer func() {
+		_ = tmp.Close()
+	}()
 
 	if _, err := io.Copy(tmp, rc); err != nil {
 		return ctrl.Result{}, err
@@ -145,7 +151,9 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	apk.Status.Phase = momov1alpha1.PhasePending
 
 	apkDecoder := android.NewAPKDecoder(tmp.Name())
-	defer apkDecoder.Close()
+	defer func() {
+		_ = apkDecoder.Close()
+	}()
 
 	sha256CertFingerprints, err := apkDecoder.SHA256CertFingerprints(ctx)
 	if err != nil {
@@ -250,7 +258,7 @@ func (r *APKReconciler) EventHandler() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
 		apks := &momov1alpha1.APKList{}
 
-		if err := r.Client.List(ctx, apks, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+		if err := r.List(ctx, apks, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
 			return []ctrl.Request{}
 		}
 

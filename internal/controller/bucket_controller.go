@@ -88,7 +88,7 @@ func (r *BucketReconciler) EventHandler(filter func(bucket momov1alpha1.Bucket, 
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
 		buckets := &momov1alpha1.BucketList{}
 
-		if err := r.Client.List(ctx, buckets, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+		if err := r.List(ctx, buckets, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
 			return []ctrl.Request{}
 		}
 

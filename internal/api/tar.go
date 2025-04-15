@@ -15,6 +15,7 @@ import (
 
 	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/android"
+	"github.com/frantjc/momo/internal/momoutil"
 	"github.com/frantjc/momo/ios"
 	xio "github.com/frantjc/x/io"
 )
@@ -33,8 +34,8 @@ func (t *fileOpts) Apply(opts *fileOpts) {
 
 func decodeContent(req *http.Request) (io.ReadCloser, error) {
 	var (
-		rc               io.ReadCloser = req.Body
-		contentEncodings               = strings.Split(strings.ToLower(req.Header.Get("Content-Encoding")), ",")
+		rc               = req.Body
+		contentEncodings = strings.Split(strings.ToLower(req.Header.Get("Content-Encoding")), ",")
 	)
 
 	for i := len(contentEncodings) - 1; i >= 0; i-- {
@@ -76,7 +77,7 @@ func reqToApp(req *http.Request, opts ...fileOpt) (io.ReadCloser, string, error)
 	case "multipart/form-data":
 		boundary := params["boundary"]
 		if boundary == "" {
-			return nil, "", newHTTPStatusCodeError(
+			return nil, "", momoutil.NewHTTPStatusCodeError(
 				fmt.Errorf("missing boundary"),
 				http.StatusBadRequest,
 			)
@@ -118,7 +119,7 @@ func reqToApp(req *http.Request, opts ...fileOpt) (io.ReadCloser, string, error)
 		}, mediaType, nil
 	}
 
-	return nil, "", newHTTPStatusCodeError(
+	return nil, "", momoutil.NewHTTPStatusCodeError(
 		fmt.Errorf("unsupported Content-Type %s", mediaType),
 		http.StatusUnsupportedMediaType,
 	)
@@ -164,7 +165,9 @@ func multipartToApp(r io.Reader, boundary string) (io.Reader, string, error) {
 		} else if err != nil {
 			return nil, "", err
 		}
-		defer p.Close()
+		defer func() {
+			_ = p.Close()
+		}()
 
 		if p.FormName() == "file" {
 			ext := strings.ToLower(path.Ext(p.FileName()))

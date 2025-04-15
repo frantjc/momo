@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -23,19 +22,15 @@ import (
 	xslice "github.com/frantjc/x/slice"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.com/google/uuid"
 	swagger "github.com/swaggo/http-swagger/v2"
 	"github.com/timewasted/go-accept-headers"
-	"gocloud.dev/blob"
 	"gocloud.dev/gcerrors"
 	"howett.net/plist"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -44,10 +39,6 @@ const (
 	paramApp       = `{app:[a-z0-9]([-a-z0-9]*[a-z0-9])?}`
 	paramVersion   = `{version}`
 	paramFile      = `{file}`
-)
-
-const (
-	labelApp = "momo.frantj.cc/app"
 )
 
 type Opts struct {
@@ -169,11 +160,11 @@ func handleErr(handler func(w http.ResponseWriter, r *http.Request) error) http.
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := handler(w, r); err != nil {
 			if nErr := negotiate(w, r, "application/json"); nErr != nil {
-				http.Error(w, err.Error(), httpStatusCode(err))
+				http.Error(w, err.Error(), momoutil.HTTPStatusCode(err))
 				return
 			}
 
-			w.WriteHeader(httpStatusCode(err))
+			w.WriteHeader(momoutil.HTTPStatusCode(err))
 			_ = respondJSON(w, r, &Error{Message: err.Error()})
 		}
 	}
@@ -182,7 +173,7 @@ func handleErr(handler func(w http.ResponseWriter, r *http.Request) error) http.
 func negotiate(w http.ResponseWriter, r *http.Request, contentType string) error {
 	if _, err := accept.Negotiate(r.Header.Get("Accept"), contentType); err != nil {
 		w.Header().Set("Accept", contentType)
-		return newHTTPStatusCodeError(err, http.StatusUnsupportedMediaType)
+		return momoutil.NewHTTPStatusCodeError(err, http.StatusUnsupportedMediaType)
 	}
 
 	w.Header().Set("Vary", "Accept")
@@ -242,101 +233,18 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 
 	var (
-		bucket     = &momov1alpha1.Bucket{}
 		ctx        = r.Context()
 		namespace  = chi.URLParam(r, "namespace")
 		bucketName = chi.URLParam(r, "bucket")
 		appName    = chi.URLParam(r, "app")
 	)
 
-	if err = cli.Get(ctx, client.ObjectKey{Name: bucketName, Namespace: namespace}, bucket); err != nil {
-		return err
-	}
-
-	b, err := momoutil.OpenBucket(ctx, cli, bucket)
-	if err != nil {
-		return err
-	}
-
-	ext := momo.ExtIPA
-	if mediaType == android.ContentTypeAPK {
-		ext = momo.ExtAPK
-	}
-
-	var (
-		artifactName = fmt.Sprintf("%s-%s", appName, uuid.NewString()[:5])
-		key          = fmt.Sprintf("%s%s", artifactName, ext)
-		selector     = map[string]string{
-			labelApp: appName,
-		}
-		mobileApp = &momov1alpha1.MobileApp{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      appName,
-			},
-			Spec: momov1alpha1.MobileAppSpec{
-				Selector: selector,
-			},
-		}
-	)
-
-	if _, err = controllerutil.CreateOrUpdate(ctx, cli, mobileApp, func() error {
-		mobileApp.Spec.Selector = selector
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	switch mediaType {
-	case android.ContentTypeAPK:
-		if err = cli.Create(ctx,
-			&momov1alpha1.APK{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      artifactName,
-					Labels:    selector,
-				},
-				Spec: momov1alpha1.APKSpec{
-					Bucket: corev1.LocalObjectReference{
-						Name: bucketName,
-					},
-					Key: key,
-				},
-			},
-		); err != nil {
-			return err
-		}
-	case ios.ContentTypeIPA:
-		if err = cli.Create(ctx,
-			&momov1alpha1.IPA{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      artifactName,
-					Labels:    selector,
-				},
-				Spec: momov1alpha1.IPASpec{
-					Bucket: corev1.LocalObjectReference{
-						Name: bucketName,
-					},
-					Key: key,
-				},
-			},
-		); err != nil {
-			return err
-		}
-	default:
-		return newHTTPStatusCodeError(fmt.Errorf("unsupported Content-Type"), http.StatusUnsupportedMediaType)
-	}
-	wc, err := b.NewWriter(ctx, key, &blob.WriterOptions{ContentType: mediaType})
-	if err != nil {
-		return err
-	}
-	defer wc.Close()
-
-	if _, err = io.Copy(wc, rc); err != nil {
+	if err := momoutil.UploadApp(ctx, cli, namespace, appName, bucketName, mediaType, rc); err != nil {
 		return err
 	}
 
@@ -349,7 +257,12 @@ func (h *handler) handleUpload(w http.ResponseWriter, r *http.Request) error {
 
 	w.WriteHeader(http.StatusCreated)
 
-	if err := respondJSON(w, r, appFromMobileApp(*mobileApp)); err != nil {
+	if err := respondJSON(w, r, appFromMobileApp(momov1alpha1.MobileApp{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      appName,
+			Namespace: namespace,
+		},
+	})); err != nil {
 		return err
 	}
 
@@ -547,7 +460,7 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 			}
 
 			if cr.Status.BundleIdentifier == "" || cr.Status.BundleName == "" || cr.Status.Version == "" {
-				return newHTTPStatusCodeError(fmt.Errorf("mobileapp is in phase %s", mobileApp.Status.Phase), http.StatusPreconditionFailed)
+				return momoutil.NewHTTPStatusCodeError(fmt.Errorf("mobileapp is in phase %s", mobileApp.Status.Phase), http.StatusPreconditionFailed)
 			}
 
 			if err := negotiate(w, r, ios.ContentTypePlist); err != nil {
@@ -638,11 +551,13 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 			return nil
 		}
 
-		return newHTTPStatusCodeError(err, http.StatusNotFound)
+		return momoutil.NewHTTPStatusCodeError(err, http.StatusNotFound)
 	} else if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 
 	switch ext {
 	case momo.ExtJPG, momo.ExtJPEG:
@@ -808,53 +723,6 @@ func respondJSON(w http.ResponseWriter, r *http.Request, a any) error {
 	}
 
 	return enc.Encode(a)
-}
-
-func newHTTPStatusCodeError(err error, httpStatusCode int) error {
-	if err == nil {
-		return nil
-	}
-
-	if 600 <= httpStatusCode || httpStatusCode < 100 {
-		httpStatusCode = 500
-	}
-
-	return &httpStatusCodeError{
-		err:            err,
-		httpStatusCode: httpStatusCode,
-	}
-}
-
-type httpStatusCodeError struct {
-	err            error
-	httpStatusCode int
-}
-
-func (e *httpStatusCodeError) Error() string {
-	if e.err == nil {
-		return ""
-	}
-
-	return e.err.Error()
-}
-
-func (e *httpStatusCodeError) Unwrap() error {
-	return e.err
-}
-
-func httpStatusCode(err error) int {
-	hscerr := &httpStatusCodeError{}
-	if errors.As(err, &hscerr) {
-		return hscerr.httpStatusCode
-	}
-
-	if apiStatus, ok := err.(apierrors.APIStatus); ok || errors.As(err, &apiStatus) {
-		if code := int(apiStatus.Status().Code); code != 0 {
-			return code
-		}
-	}
-
-	return http.StatusInternalServerError
 }
 
 func wantsPretty(r *http.Request) bool {

@@ -19,7 +19,7 @@ func main() {
 	)
 
 	if err = command.SetCommon(command.NewAppa(), SemVer()).ExecuteContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		os.Stderr.WriteString(err.Error() + "\n")
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		stop()
 		xos.ExitFromError(err)
 	}

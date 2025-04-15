@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/frantjc/momo"
+	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
+	"github.com/frantjc/momo/internal/momoutil"
+	"github.com/frantjc/momo/ios"
 	xslice "github.com/frantjc/x/slice"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/labels"
@@ -34,6 +39,7 @@ func newUploadApp(name string) *cobra.Command {
 	var (
 		addr         string
 		bucketName   string
+		isIPA, isAPK bool
 		bucketLabels map[string]string
 		cfgFlags     = genericclioptions.NewConfigFlags(true)
 		cmd          = &cobra.Command{
@@ -45,6 +51,7 @@ func newUploadApp(name string) *cobra.Command {
 					file    = args[1]
 					cliCfg  = cfgFlags.ToRawKubeConfigLoader()
 					cli     = new(momo.Client)
+					kubeCli client.Client
 				)
 
 				namespace, ok, err := cliCfg.Namespace()
@@ -66,17 +73,25 @@ func newUploadApp(name string) *cobra.Command {
 					cli.HTTPClient = http.DefaultClient
 					cli.HTTPClient.Transport = &kubeAuthTransport{RestConfig: restCfg}
 
+					scheme := runtime.NewScheme()
+
+					if err := momov1alpha1.AddToScheme(scheme); err != nil {
+						return err
+					}
+
+					kubeCli, err = client.New(restCfg, client.Options{Scheme: scheme})
+					if err != nil {
+						return err
+					}
+
 					if bucketName == "" {
-						var (
-							scheme  = runtime.NewScheme()
-							buckets = &momov1alpha1.BucketList{}
-						)
+						buckets := &momov1alpha1.BucketList{}
 
 						if err := momov1alpha1.AddToScheme(scheme); err != nil {
 							return err
 						}
 
-						kubeCli, err := client.New(restCfg, client.Options{Scheme: scheme})
+						kubeCli, err = client.New(restCfg, client.Options{Scheme: scheme})
 						if err != nil {
 							return err
 						}
@@ -113,6 +128,35 @@ func newUploadApp(name string) *cobra.Command {
 				}
 
 				if err := cli.UploadApp(ctx, file, namespace, bucketName, appName); err != nil {
+					if !cmd.Flag("addr").Changed && kubeCli != nil {
+						mediaType := ios.ContentTypeIPA
+						if isAPK {
+							mediaType = android.ContentTypeAPK
+						} else if !isIPA {
+							ext := filepath.Ext(file)
+							switch ext {
+							case momo.ExtAPK:
+								mediaType = android.ContentTypeAPK
+							case momo.ExtIPA:
+								mediaType = ios.ContentTypeIPA
+							default:
+								return fmt.Errorf("unable to determine if %s is an .apk or .ipa", file)
+							}
+						}
+
+						f, err := os.Open(file)
+						if err != nil {
+							return err
+						}
+						defer func() {
+							_ = f.Close()
+						}()
+
+						if err := momoutil.UploadApp(ctx, kubeCli, namespace, appName, bucketName, mediaType, f); err != nil {
+							return err
+						}
+					}
+
 					return err
 				}
 
@@ -125,6 +169,8 @@ func newUploadApp(name string) *cobra.Command {
 	cmd.Flags().StringVarP(&addr, "addr", "a", "", "")
 	cmd.Flags().StringVarP(&bucketName, "bucket", "b", "", "")
 	cmd.Flags().StringToStringVarP(&bucketLabels, "bucket-label", "l", nil, "")
+	cmd.Flags().BoolVar(&isAPK, "apk", false, "")
+	cmd.Flags().BoolVar(&isIPA, "ipa", false, "")
 
 	return cmd
 }
