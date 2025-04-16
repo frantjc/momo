@@ -12,6 +12,15 @@ GIT ?= git
 KUBECTL ?= kubectl
 DOCKER ?= docker
 
+.PHONY: dev
+dev: manifests install
+	@$(DOCKER) compose up --build --detach
+	@$(KUBECTL) apply -f config/samples/momo_v1alpha1_bucket.yaml
+
+.PHONY: dev-upload-apk
+dev-upload-apk: dev appa
+	@AWS_ACCESS_KEY_ID=momominio AWS_SECRET_ACCESS_KEY=momominio AWS_REGION=us-east-1 $(APPA) upload --addr=http://localhost:8080/api/v1 app default testdata/momo.apk
+
 .PHONY: manifests
 manifests: controller-gen
 	@$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
@@ -39,17 +48,13 @@ lint: golangci-lint fmt
 	@$(GOLANGCI_LINT) config verify
 	@$(GOLANGCI_LINT) run --fix
 
-ifndef ignore-not-found
-  ignore-not-found = false
-endif
-
 .PHONY: install
 install: manifests kustomize
 	@$(KUSTOMIZE) build config/crd | kubectl apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize
-	@$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+	@$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found=true -f -
 
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
@@ -70,6 +75,7 @@ SWAG_VERSION ?= v1.16.4
 .PHONY: appa
 appa: $(APPA)
 $(APPA): $(LOCALBIN)
+	@rm $@
 	@$(GO) build -o $@ ./cmd/appa
 
 .PHONY: kubectl-upload_app
@@ -122,9 +128,3 @@ internal/api: swag
 	@$(SWAG) fmt --dir $@
 	@$(SWAG) init --dir $@ --output $@ --outputTypes json --parseInternal
 	@echo >> $@/swagger.json
-
-.PHONY: test-upload
-test-upload: appa
-	@$(DOCKER) compose up -d
-	@$(KUBECTL) apply -f config/samples/momo_v1alpha1_bucket.yaml
-	@$(APPA) upload app default testdata/momo.apk

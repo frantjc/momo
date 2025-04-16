@@ -62,7 +62,7 @@ func (c *Client) UploadApp(ctx context.Context, file, namespace, bucketName, app
 		_ = f.Close()
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath(namespace, "uploads", bucketName, appName).String(), f)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL.JoinPath(namespace, "upload", bucketName, appName).String(), f)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (c *Client) UploadApp(ctx context.Context, file, namespace, bucketName, app
 	case ExtAPK:
 		req.Header.Set("Content-Type", android.ContentTypeAPK)
 	default:
-		return fmt.Errorf("unrecognized file extension: %s", ext)
+		return fmt.Errorf("unrecognized file extension %s", ext)
 	}
 
 	res, err := c.HTTPClient.Do(req)
