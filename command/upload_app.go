@@ -22,7 +22,7 @@ import (
 )
 
 // NewUpload returns the command which acts as
-// the entrypoint for `appa upload`.
+// the entrypoint for `appa upload app`.
 func NewUploadApp() *cobra.Command {
 	return newUploadApp("app")
 }
