@@ -544,7 +544,16 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 
-			if err := jpeg.Encode(w, img, &jpeg.Options{Quality: 100}); err != nil {
+			quality, err := strconv.Atoi(r.URL.Query().Get("quality"))
+			if err != nil {
+				quality = jpeg.DefaultQuality
+			} else if quality > 100 {
+				quality = 100
+			} else if quality < 1 {
+				quality = 1
+			}
+
+			if err := jpeg.Encode(w, img, &jpeg.Options{Quality: quality}); err != nil {
 				return err
 			}
 
@@ -568,7 +577,7 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 
 		quality, err := strconv.Atoi(r.URL.Query().Get("quality"))
 		if err != nil {
-			quality = 100
+			quality = jpeg.DefaultQuality
 		} else if quality > 100 {
 			quality = 100
 		} else if quality < 1 {

@@ -9,6 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/frantjc/momo/android"
+	"github.com/frantjc/momo/ios"
 )
 
 const (
@@ -67,9 +70,9 @@ func (c *Client) UploadApp(ctx context.Context, file, namespace, bucketName, app
 	ext := strings.ToLower(filepath.Ext(file))
 	switch ext {
 	case ExtIPA:
-		req.Header.Set("Content-Type", "application/octet-stream")
+		req.Header.Set("Content-Type", ios.ContentTypeIPA)
 	case ExtAPK:
-		req.Header.Set("Content-Type", "application/vnd.android.package-archive")
+		req.Header.Set("Content-Type", android.ContentTypeAPK)
 	default:
 		return fmt.Errorf("unrecognized file extension: %s", ext)
 	}

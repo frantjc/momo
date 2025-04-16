@@ -1,9 +1,9 @@
 package ios
 
 type AppleAppSiteAssociation struct {
-	AppLinks       AppLinks       `json:"applinks,omitempty"`
-	WebCredentials WebCredentials `json:"webcredentials,omitempty"`
-	AppClips       AppClips       `json:"appclips,omitempty"`
+	AppLinks       AppLinks       `json:"applinks"`
+	WebCredentials WebCredentials `json:"webcredentials"`
+	AppClips       AppClips       `json:"appclips"`
 }
 
 type AppLinks struct {

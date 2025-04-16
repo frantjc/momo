@@ -87,15 +87,6 @@ func newUploadApp(name string) *cobra.Command {
 					if bucketName == "" {
 						buckets := &momov1alpha1.BucketList{}
 
-						if err := momov1alpha1.AddToScheme(scheme); err != nil {
-							return err
-						}
-
-						kubeCli, err = client.New(restCfg, client.Options{Scheme: scheme})
-						if err != nil {
-							return err
-						}
-
 						if err = kubeCli.List(ctx, buckets, &client.ListOptions{
 							Namespace:     namespace,
 							LabelSelector: labels.Set(bucketLabels).AsSelector(),
