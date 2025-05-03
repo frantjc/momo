@@ -9,6 +9,7 @@ import (
 const (
 	PhaseReady   = "Ready"
 	PhasePending = "Pending"
+	PhaseFailed  = "Failed"
 )
 
 // MobileAppSpec defines the desired state of MobileApp.
@@ -27,12 +28,17 @@ type MobileAppSpecUniversalLinks struct {
 type MobileAppSpecUniversalLinksIngress struct {
 	// +kubebuilder:validation:Optional
 	Host string `json:"host,omitempty"`
+	// +kubebuilder:validation:Optional
+	Issuer corev1.ObjectReference `json:"issuer,omitempty"`
 }
 
 // MobileAppStatus defines the observed state of MobileApp.
 type MobileAppStatus struct {
 	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Failed
 	Phase string `json:"phase"`
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// +kubebuilder:validation:Optional
 	APKs []MobileAppStatusApp `json:"apks,omitempty"`
 	// +kubebuilder:validation:Optional
@@ -54,6 +60,7 @@ type MobileAppStatusApp struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 
 // MobileApp is the Schema for the MobileApps API.
 type MobileApp struct {

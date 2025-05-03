@@ -16,7 +16,10 @@ type IPASpec struct {
 // IPAStatus defines the observed state of IPA.
 type IPAStatus struct {
 	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Failed
 	Phase string `json:"phase"`
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// +kubebuilder:validation:Optional
 	Digest string `json:"digest,omitempty"`
 	// +kubebuilder:validation:Optional
@@ -31,6 +34,11 @@ type IPAStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Digest",type=string,JSONPath=`.status.digest`
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.status.version`
+// +kubebuilder:printcolumn:name="BundleName",type=string,JSONPath=`.status.bundleName`
+// +kubebuilder:printcolumn:name="BundleIdentifier",type=string,JSONPath=`.status.bundleIdentifier`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 
 // IPA is the Schema for the IPAs API.
 type IPA struct {

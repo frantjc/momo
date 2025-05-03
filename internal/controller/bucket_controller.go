@@ -9,6 +9,7 @@ import (
 	xslice "github.com/frantjc/x/slice"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,11 +46,7 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	bucket.Status.Phase = momov1alpha1.PhasePending
 
-	defer func() {
-		_ = r.Client.Status().Update(ctx, bucket)
-	}()
-
-	if _, err := momoutil.OpenBucket(ctx, r.Client, bucket); err != nil {
+	if err := r.Client.Status().Update(ctx, bucket); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -57,9 +54,30 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	bucket.Status.Phase = momov1alpha1.PhaseReady
+	if _, err := momoutil.OpenBucket(ctx, r.Client, bucket); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 
-	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
+		bucket.Status.Phase = momov1alpha1.PhaseFailed
+		SetCondition(bucket, metav1.Condition{
+			Type:    "Opened",
+			Reason:  "FailedToOpen",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, r.Client.Status().Update(ctx, bucket)
+	}
+
+	bucket.Status.Phase = momov1alpha1.PhaseReady
+	SetCondition(bucket, metav1.Condition{
+		Type:   "Opened",
+		Reason: "BucketOpened",
+		Status: metav1.ConditionTrue,
+	})
+
+	return ctrl.Result{RequeueAfter: time.Minute * 9}, r.Client.Status().Update(ctx, bucket)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -101,4 +119,32 @@ func (r *BucketReconciler) EventHandler(filter func(bucket momov1alpha1.Bucket, 
 			},
 		)
 	})
+}
+
+type ConditionsAware interface {
+	GetGeneration() int64
+	GetConditions() []metav1.Condition
+	SetConditions(conditions []metav1.Condition)
+}
+
+func SetCondition(conditionsAware ConditionsAware, condition metav1.Condition) {
+	conditions := conditionsAware.GetConditions()
+	if conditions == nil {
+		conditions = []metav1.Condition{}
+	}
+
+	for i, c := range conditions {
+		if c.Type == condition.Type {
+			if c.Message != condition.Message || c.Reason != condition.Reason || c.Status != condition.Status {
+				condition.LastTransitionTime = metav1.Now()
+				condition.ObservedGeneration = conditionsAware.GetGeneration()
+				conditions[i] = condition
+				conditionsAware.SetConditions(conditions)
+			}
+			return
+		}
+	}
+
+	conditions = append(conditions, condition)
+	conditionsAware.SetConditions(conditions)
 }

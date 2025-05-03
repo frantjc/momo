@@ -27,7 +27,10 @@ type AppStatusIcon struct {
 // APKStatus defines the observed state of APK.
 type APKStatus struct {
 	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Failed
 	Phase string `json:"phase"`
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	// +kubebuilder:validation:Optional
 	Digest string `json:"digest,omitempty"`
 	// +kubebuilder:validation:Optional
@@ -42,6 +45,11 @@ type APKStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Digest",type=string,JSONPath=`.status.digest`
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.status.version`
+// +kubebuilder:printcolumn:name="Package",type=string,JSONPath=`.status.package`
+// +kubebuilder:printcolumn:name="SHA256CertFingerprints",type=string,JSONPath=`.status.sha256CertFingerprints`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 
 // APK is the Schema for the APKs API.
 type APK struct {

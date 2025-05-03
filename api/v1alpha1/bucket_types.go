@@ -16,11 +16,15 @@ type BucketSpec struct {
 // BucketStatus defines the observed state of Bucket.
 type BucketStatus struct {
 	// +kubebuilder:default=Pending
+	// +kubebuilder:validation:Enum=Pending;Ready;Failed
 	Phase string `json:"phase"`
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 
 // Bucket is the Schema for the buckets API.
 type Bucket struct {

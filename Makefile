@@ -19,7 +19,10 @@ dev: manifests install
 
 .PHONY: dev-upload-apk
 dev-upload-apk: dev appa
-	@AWS_ACCESS_KEY_ID=momominio AWS_SECRET_ACCESS_KEY=momominio AWS_REGION=us-east-1 $(APPA) upload --addr=http://localhost:8080/api/v1 app default testdata/momo.apk
+	@AWS_ACCESS_KEY_ID=momominio AWS_SECRET_ACCESS_KEY=momominio AWS_REGION=us-east-1 \
+		$(APPA) upload app \
+			--addr=http://localhost:8080/api/v1 \
+			default testdata/momo.apk
 
 .PHONY: manifests
 manifests: controller-gen

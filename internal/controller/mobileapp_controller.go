@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
+	"github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/ios"
@@ -55,6 +57,16 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	mobileApp.Status.Phase = momov1alpha1.PhasePending
+
+	if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, err
+	}
+
 	apks := &momov1alpha1.APKList{}
 
 	if err := r.List(ctx,
@@ -67,11 +79,6 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	defer func() {
-		_ = r.Client.Status().Update(ctx, mobileApp)
-	}()
-
-	mobileApp.Status.Phase = momov1alpha1.PhasePending
 	mobileApp.Status.APKs = []momov1alpha1.MobileAppStatusApp{}
 
 	packageToSHA256CertFingerprints := map[string][]string{}
@@ -96,6 +103,19 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	mobileApp.Status.APKs = markLatest(mobileApp.Status.APKs)
+	SetCondition(mobileApp, metav1.Condition{
+		Type:   "AggregatedAPKs",
+		Reason: "GotAPKs",
+		Status: metav1.ConditionTrue,
+	})
+
+	if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, err
+	}
 
 	ipas := &momov1alpha1.IPAList{}
 
@@ -126,6 +146,19 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	mobileApp.Status.IPAs = markLatest(mobileApp.Status.IPAs)
+	SetCondition(mobileApp, metav1.Condition{
+		Type:   "AggregatedIPAs",
+		Reason: "GotIPAs",
+		Status: metav1.ConditionTrue,
+	})
+
+	if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, err
+	}
 
 	if mobileApp.Spec.UniversalLinks.Ingress.Host != "" {
 		bundleIdentifiers = xslice.Unique(bundleIdentifiers)
@@ -329,7 +362,51 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 
-		ingress.Annotations = map[string]string{"cert-manager.io/cluster-issuer": "letsencrypt"}
+		if issuer := mobileApp.Spec.UniversalLinks.Ingress.Issuer; issuer.Name != "" {
+			switch issuer.APIVersion {
+			case v1.SchemeGroupVersion.String(), "":
+				return ctrl.Result{}, fmt.Errorf("unsupported %s apiVersion %s", issuer.APIVersion, issuer.Kind)
+			}
+
+			switch issuer.Kind {
+			case v1.ClusterIssuerKind:
+				if issuer.Namespace != "" {
+					return ctrl.Result{}, fmt.Errorf("ClusterIssuer is cluster-scoped, but got Namespace %s", issuer.Namespace)
+				}
+
+				var (
+					clusterIssuer = &v1.ClusterIssuer{}
+					key           = client.ObjectKey{
+						Name: issuer.Name,
+					}
+				)
+
+				if err := r.Get(ctx, key, clusterIssuer); err != nil {
+					return ctrl.Result{}, err
+				}
+
+				ingress.Annotations = map[string]string{"cert-manager.io/cluster-issuer": clusterIssuer.Name}
+			case v1.IssuerKind, "":
+				var (
+					issuer = &v1.Issuer{}
+					key    = client.ObjectKey{
+						Namespace: mobileApp.Spec.UniversalLinks.Ingress.Issuer.Namespace,
+						Name:      mobileApp.Spec.UniversalLinks.Ingress.Issuer.Name,
+					}
+				)
+				if key.Namespace != mobileApp.Namespace {
+					return ctrl.Result{}, fmt.Errorf("cannot use Issuer from different Namespace %s", key.Namespace)
+				}
+
+				if err := r.Get(ctx, key, issuer); err != nil {
+					return ctrl.Result{}, err
+				}
+
+				ingress.Annotations = map[string]string{"cert-manager.io/issuer": issuer.Name}
+			default:
+				return ctrl.Result{}, fmt.Errorf("unsupported kind %s", mobileApp.Spec.UniversalLinks.Ingress.Issuer.Kind)
+			}
+		}
 
 		if _, err := controllerutil.CreateOrUpdate(ctx, r, ingress, func() error {
 			ingress.Spec = ingressSpec
@@ -338,9 +415,23 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		SetCondition(mobileApp, metav1.Condition{
+			Type:   "CreatedOrUpdatedWellKnown",
+			Reason: "Created",
+			Status: metav1.ConditionTrue,
+		})
+	} else {
+		SetCondition(mobileApp, metav1.Condition{
+			Type:   "CreatedOrUpdatedWellKnown",
+			Reason: "Skipped",
+			Status: metav1.ConditionFalse,
+		})
 	}
 
-	return ctrl.Result{}, nil
+	mobileApp.Status.Phase = momov1alpha1.PhaseReady
+
+	return ctrl.Result{}, r.Client.Status().Update(ctx, mobileApp)
 }
 
 func markLatest(apps []momov1alpha1.MobileAppStatusApp) []momov1alpha1.MobileAppStatusApp {
@@ -368,8 +459,10 @@ func (r *MobileAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&momov1alpha1.MobileApp{}).
-		Watches(&momov1alpha1.APK{}, r.EventHandler()).
-		Watches(&momov1alpha1.IPA{}, r.EventHandler()).
+		Watches(&momov1alpha1.APK{}, r.BinaryEventHandler()).
+		Watches(&momov1alpha1.IPA{}, r.BinaryEventHandler()).
+		Watches(&v1.Issuer{}, r.IssuerEventHandler()).
+		Watches(&v1.ClusterIssuer{}, r.IssuerEventHandler()).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
@@ -378,7 +471,7 @@ func (r *MobileAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *MobileAppReconciler) EventHandler() handler.EventHandler {
+func (r *MobileAppReconciler) BinaryEventHandler() handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
 		if lbls := obj.GetLabels(); lbls != nil {
 			mobileApps := &momov1alpha1.MobileAppList{}
@@ -390,6 +483,33 @@ func (r *MobileAppReconciler) EventHandler() handler.EventHandler {
 			return xslice.Map(
 				xslice.Filter(mobileApps.Items, func(mobileApp momov1alpha1.MobileApp, _ int) bool {
 					return mobileApp.Spec.Selector.AsSelector().Matches(labels.Set(lbls))
+				}),
+				func(mobileApp momov1alpha1.MobileApp, _ int) ctrl.Request {
+					return ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&mobileApp)}
+				},
+			)
+		}
+
+		return []ctrl.Request{}
+	})
+}
+
+func (r *MobileAppReconciler) IssuerEventHandler() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []ctrl.Request {
+		if lbls := obj.GetLabels(); lbls != nil {
+			mobileApps := &momov1alpha1.MobileAppList{}
+
+			if err := r.List(ctx, mobileApps, &client.ListOptions{Namespace: obj.GetNamespace()}); err != nil {
+				return []ctrl.Request{}
+			}
+
+			return xslice.Map(
+				xslice.Filter(mobileApps.Items, func(mobileApp momov1alpha1.MobileApp, _ int) bool {
+					return mobileApp.Spec.UniversalLinks.Ingress.Issuer.Name == obj.GetName() &&
+						mobileApp.Spec.UniversalLinks.Ingress.Issuer.Namespace == obj.GetNamespace() &&
+						(mobileApp.Spec.UniversalLinks.Ingress.Issuer.Kind == obj.GetObjectKind().GroupVersionKind().Kind || mobileApp.Spec.UniversalLinks.Ingress.Issuer.Kind == "") &&
+						(mobileApp.Spec.UniversalLinks.Ingress.Issuer.APIVersion == v1.SchemeGroupVersion.String() || mobileApp.Spec.UniversalLinks.Ingress.Issuer.APIVersion == "") &&
+						mobileApp.Spec.UniversalLinks.Ingress.Host != ""
 				}),
 				func(mobileApp momov1alpha1.MobileApp, _ int) ctrl.Request {
 					return ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&mobileApp)}

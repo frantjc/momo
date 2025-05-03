@@ -8,6 +8,10 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
 
 	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/android"
@@ -32,9 +36,54 @@ func GetBucket(ctx context.Context, cli client.Client, key client.ObjectKey) (*m
 	return bucket, nil
 }
 
+var (
+	mu sync.Mutex
+)
+
+func openBucket(ctx context.Context, urlstr string) (*blob.Bucket, error) {
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		return nil, err
+	}
+
+	if envs := u.Query()["env"]; len(envs) > 0 {
+		mu.Lock()
+		defer mu.Unlock()
+
+		for _, env := range envs {
+			parts := strings.Split(env, "=")
+
+			if len(parts) >= 2 {
+				prev, ok := os.LookupEnv(parts[0])
+				if ok {
+					defer func() {
+						_ = os.Setenv(parts[0], prev)
+					}()
+				} else {
+					defer func() {
+						_ = os.Unsetenv(parts[0])
+					}()
+				}
+
+				if err := os.Setenv(parts[0], strings.Join(parts[1:], "=")); err != nil {
+					return nil, fmt.Errorf("set env %s: %w", parts[0], err)
+				}
+			}
+		}
+
+		q := u.Query()
+		q.Del("env")
+		u.RawQuery = q.Encode()
+
+		return blob.OpenBucket(ctx, u.String())
+	}
+
+	return blob.OpenBucket(ctx, urlstr)
+}
+
 func OpenBucket(ctx context.Context, cli client.Client, bucket *momov1alpha1.Bucket) (*blob.Bucket, error) {
 	if bucket.Spec.URL != "" {
-		return blob.OpenBucket(ctx, bucket.Spec.URL)
+		return openBucket(ctx, bucket.Spec.URL)
 	} else if bucket.Spec.URLFrom != nil {
 		if bucket.Spec.URLFrom.ConfigMapKeyRef != nil {
 			configMap := &corev1.ConfigMap{}
@@ -47,11 +96,13 @@ func OpenBucket(ctx context.Context, cli client.Client, bucket *momov1alpha1.Buc
 			); err != nil {
 				return nil, fmt.Errorf("get ConfigMap: %w", err)
 			}
+
 			value, ok := configMap.Data[bucket.Spec.URLFrom.ConfigMapKeyRef.Key]
 			if !ok {
 				return nil, fmt.Errorf("get key %s in ConfigMap %s", bucket.Spec.URLFrom.ConfigMapKeyRef.Key, bucket.Spec.URLFrom.ConfigMapKeyRef.Name)
 			}
-			return blob.OpenBucket(ctx, value)
+
+			return openBucket(ctx, value)
 		}
 
 		if bucket.Spec.URLFrom.SecretKeyRef != nil {
@@ -65,11 +116,13 @@ func OpenBucket(ctx context.Context, cli client.Client, bucket *momov1alpha1.Buc
 			); err != nil {
 				return nil, fmt.Errorf("get Secret: %w", err)
 			}
+
 			value, ok := secret.Data[bucket.Spec.URLFrom.SecretKeyRef.Key]
 			if !ok {
 				return nil, fmt.Errorf("get key %s in Secret %s", bucket.Spec.URLFrom.SecretKeyRef.Key, bucket.Spec.URLFrom.SecretKeyRef.Name)
 			}
-			return blob.OpenBucket(ctx, string(value))
+
+			return openBucket(ctx, string(value))
 		}
 
 		if bucket.Spec.URLFrom.FieldRef != nil {
