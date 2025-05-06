@@ -38,6 +38,15 @@ rules:
   - update
   - watch
 - apiGroups:
+  - cert-manager.io
+  resources:
+  - clusterissuers
+  - issuers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - momo.frantj.cc
   resources:
   - apks
@@ -56,9 +65,7 @@ rules:
   - momo.frantj.cc
   resources:
   - apks/finalizers
-  - buckets/finalizers
   - ipas/finalizers
-  - mobileapps/finalizers
   verbs:
   - update
 - apiGroups:

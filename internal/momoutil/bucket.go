@@ -245,14 +245,6 @@ func UploadApp(ctx context.Context, cli client.Client, namespace, name, bucketNa
 			},
 		}
 	)
-
-	if _, err = controllerutil.CreateOrUpdate(ctx, cli, mobileApp, func() error {
-		mobileApp.Spec.Selector = selector
-		return nil
-	}); err != nil {
-		return err
-	}
-
 	switch mediaType {
 	case android.ContentTypeAPK:
 		if err = cli.Create(ctx,
@@ -300,6 +292,13 @@ func UploadApp(ctx context.Context, cli client.Client, namespace, name, bucketNa
 	}()
 
 	if _, err = io.Copy(wc, r); err != nil {
+		return err
+	}
+
+	if _, err = controllerutil.CreateOrUpdate(ctx, cli, mobileApp, func() error {
+		mobileApp.Spec.Selector = selector
+		return nil
+	}); err != nil {
 		return err
 	}
 

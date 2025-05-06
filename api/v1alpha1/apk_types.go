@@ -60,6 +60,14 @@ type APK struct {
 	Status APKStatus `json:"status,omitempty"`
 }
 
+func (a APK) GetKey() string {
+	return a.Spec.Key
+}
+
+func (a APK) GetIcons() []AppStatusIcon {
+	return a.Status.Icons
+}
+
 // +kubebuilder:object:root=true
 
 // APKList contains a list of APK.

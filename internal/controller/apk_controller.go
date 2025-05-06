@@ -1,16 +1,10 @@
 package controller
 
 import (
-	"archive/tar"
 	"context"
-	"errors"
 	"fmt"
-	"image"
 	"io"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/frantjc/momo/android"
@@ -19,33 +13,26 @@ import (
 	xslice "github.com/frantjc/x/slice"
 	xstrings "github.com/frantjc/x/strings"
 	"github.com/opencontainers/go-digest"
+	"gocloud.dev/gcerrors"
 	"golang.org/x/mod/semver"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// APKReconciler reconciles a APK object
+// APKReconciler reconciles an APK object
 type APKReconciler struct {
 	client.Client
 	record.EventRecorder
 	TmpDir string
-}
-
-const (
-	AnnotationForceUnpack = "momo.frantj.cc/force-unpack"
-)
-
-func shouldForceUnpack(obj client.Object) bool {
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
-		return false
-	}
-	b, _ := strconv.ParseBool(annotations[AnnotationForceUnpack])
-	return b
 }
 
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks,verbs=get;list;watch;create;update;patch;delete
@@ -62,11 +49,15 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	)
 
 	if err := r.Get(ctx, req.NamespacedName, apk); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
+		return ctrl.Result{}, ignoreNotFound(err)
+	}
 
-		return ctrl.Result{}, err
+	if apk.Status.Phase != momov1alpha1.PhasePending {
+		apk.Status.Phase = momov1alpha1.PhasePending
+
+		if err := r.Client.Status().Update(ctx, apk); err != nil {
+			return ctrl.Result{}, ignoreNotFound(err)
+		}
 	}
 
 	bucket := &momov1alpha1.Bucket{}
@@ -79,6 +70,7 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		bucket,
 	); err != nil {
 		if apierrors.IsNotFound(err) {
+			r.Eventf(apk, corev1.EventTypeWarning, "BucketNotFound", "Bucket %s is not found", bucket.Name)
 			return ctrl.Result{}, nil
 		}
 
@@ -86,29 +78,45 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	if bucket.Status.Phase != momov1alpha1.PhaseReady {
+		r.Eventf(apk, corev1.EventTypeNormal, "BucketNotReady", "Bucket %s is not ready", bucket.Name)
 		return ctrl.Result{}, nil
 	}
 
 	cli, err := momoutil.OpenBucket(ctx, r.Client, bucket)
 	if err != nil {
-		return ctrl.Result{}, err
+		// If the Bucket is Ready, then this error
+		// is likely temporary and will resolve itself.
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	if !apk.DeletionTimestamp.IsZero() {
-		if err := cli.Delete(ctx, apk.Spec.Key); err != nil {
-			return ctrl.Result{}, err
+		for _, icon := range apk.Status.Icons {
+			switch gcerrors.Code(cli.Delete(ctx, icon.Key)) {
+			case gcerrors.NotFound, gcerrors.OK:
+			default:
+				r.Eventf(apk, corev1.EventTypeWarning, "DeleteObject", "Deleting icon %s from bucket %s: %v", icon.Key, bucket.Name, err)
+				return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
+			}
+		}
+
+		if controllerutil.RemoveFinalizer(apk, Finalizer) {
+			return ctrl.Result{}, ignoreNotFound(r.Update(ctx, apk))
 		}
 
 		return ctrl.Result{}, nil
 	}
 
-	defer func() {
-		_ = r.Client.Status().Update(ctx, apk)
-	}()
-
 	rc, err := cli.NewReader(ctx, apk.Spec.Key, nil)
 	if err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "GetAPK",
+			Reason:  "ReadObject",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 	defer func() {
 		_ = rc.Close()
@@ -116,7 +124,15 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	tmp, err := os.CreateTemp(r.TmpDir, "*.apk")
 	if err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "GetAPK",
+			Reason:  "CreateTemp",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 	defer func() {
 		_ = os.Remove(tmp.Name())
@@ -126,29 +142,68 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}()
 
 	if _, err := io.Copy(tmp, rc); err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "GetAPK",
+			Reason:  "WriteTemp",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	if err = rc.Close(); err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "GetAPK",
+			Reason:  "CloseObject",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	dig, err := digest.FromReader(tmp)
 	if err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "GetAPK",
+			Reason:  "SumTemp",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	if err = tmp.Close(); err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "GetAPK",
+			Reason:  "CloseTemp",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
-	forceUnpack := shouldForceUnpack(apk)
-
-	if !forceUnpack && dig.String() == apk.Status.Digest {
-		return ctrl.Result{}, nil
+	if setCondition(apk, metav1.Condition{
+		Type:   "GetAPK",
+		Reason: "Downloaded",
+		Status: metav1.ConditionTrue,
+	}) {
+		if err := r.Client.Status().Update(ctx, apk); err != nil {
+			return ctrl.Result{}, ignoreNotFound(err)
+		}
 	}
 
-	apk.Status.Phase = momov1alpha1.PhasePending
+	if dig.String() == apk.Status.Digest {
+		apk.Status.Phase = momov1alpha1.PhaseReady
+		return ctrl.Result{}, ignoreNotFound(r.Client.Status().Update(ctx, apk))
+	}
 
 	apkDecoder := android.NewAPKDecoder(tmp.Name())
 	defer func() {
@@ -157,14 +212,30 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	sha256CertFingerprints, err := apkDecoder.SHA256CertFingerprints(ctx)
 	if err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "UnpackAPK",
+			Reason:  "SHA256CertFingerprints",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	apk.Status.SHA256CertFingerprints = sha256CertFingerprints
 
 	metadata, err := apkDecoder.Metadata(ctx)
 	if err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "UnpackAPK",
+			Reason:  "APKToolMetadata",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	apk.Status.Version = semver.Canonical(
@@ -176,68 +247,52 @@ func (r *APKReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	manifest, err := apkDecoder.Manifest(ctx)
 	if err != nil {
-		return ctrl.Result{}, err
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "UnpackAPK",
+			Reason:  "Manifest.xml",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	apk.Status.Package = manifest.Package()
 
-	icons, err := apkDecoder.Icons(ctx)
-	if err != nil {
-		return ctrl.Result{}, err
+	if err := r.Client.Status().Update(ctx, apk); err != nil {
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	apk.Status.Icons = []momov1alpha1.AppStatusIcon{}
-
-	tr := tar.NewReader(icons)
-	for {
-		hdr, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		} else if err != nil {
-			return ctrl.Result{}, err
+	if controllerutil.AddFinalizer(apk, Finalizer) {
+		if err := r.Update(ctx, apk); err != nil {
+			return ctrl.Result{}, ignoreNotFound(err)
 		}
+	}
 
-		img, _, err := image.Decode(tr)
-		if err != nil {
-			// TODO: Event.
-			continue
-		}
-
-		var (
-			bounds = img.Bounds()
-			height = bounds.Dy()
-			width  = bounds.Dx()
-			ext    = filepath.Ext(hdr.Name)
-			key    = filepath.Join(
-				filepath.Dir(apk.Spec.Key),
-				apk.Namespace,
-				apk.Name,
-				fmt.Sprintf("%s-%dx%d%s",
-					strings.ToLower(strings.TrimSuffix(hdr.Name, ext)),
-					height,
-					width,
-					".png",
-				),
-			)
-		)
-
-		if err = momoutil.UploadImage(ctx, cli, key, img); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		apk.Status.Icons = append(apk.Status.Icons, momov1alpha1.AppStatusIcon{
-			Key:  key,
-			Size: height,
+	apk.Status.Icons, err = unpackIcons(ctx, cli, apkDecoder, apk, r.EventRecorder)
+	if err != nil {
+		apk.Status.Phase = momov1alpha1.PhaseFailed
+		setCondition(apk, metav1.Condition{
+			Type:    "UnpackAPK",
+			Reason:  "Icons",
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
 		})
+
+		return ctrl.Result{}, ignoreNotFound(r.Status().Update(ctx, apk))
 	}
 
 	apk.Status.Digest = dig.String()
 	apk.Status.Phase = momov1alpha1.PhaseReady
-	if forceUnpack {
-		delete(apk.Annotations, AnnotationForceUnpack)
-		if err := r.Update(ctx, apk); err != nil {
-			return ctrl.Result{}, err
-		}
+	setCondition(apk, metav1.Condition{
+		Type:   "UnpackAPK",
+		Reason: "Unpacked",
+		Status: metav1.ConditionTrue,
+	})
+
+	if err := r.Client.Status().Update(ctx, apk); err != nil {
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
 	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
@@ -248,7 +303,7 @@ func (r *APKReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Client = mgr.GetClient()
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&momov1alpha1.APK{}).
+		For(&momov1alpha1.APK{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&momov1alpha1.Bucket{}, r.EventHandler()).
 		Named("apk").
 		Complete(r)

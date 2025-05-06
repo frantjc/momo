@@ -49,6 +49,14 @@ type IPA struct {
 	Status IPAStatus `json:"status,omitempty"`
 }
 
+func (i IPA) GetKey() string {
+	return i.Spec.Key
+}
+
+func (i IPA) GetIcons() []AppStatusIcon {
+	return i.Status.Icons
+}
+
 // +kubebuilder:object:root=true
 
 // IPAList contains a list of IPA.

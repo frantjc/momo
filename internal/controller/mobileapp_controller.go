@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	v1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
 	"github.com/frantjc/momo/ios"
@@ -15,16 +15,17 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // MobileAppReconciler reconciles a MobileApp object
@@ -35,11 +36,11 @@ type MobileAppReconciler struct {
 
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=mobileapps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=mobileapps/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=momo.frantj.cc,resources=mobileapps/finalizers,verbs=update
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=apks;ipas,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=issuers;clusterissuers,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -50,21 +51,15 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	)
 
 	if err := r.Get(ctx, req.NamespacedName, mobileApp); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	mobileApp.Status.Phase = momov1alpha1.PhasePending
+	if mobileApp.Status.Phase != momov1alpha1.PhasePending {
+		mobileApp.Status.Phase = momov1alpha1.PhasePending
 
-	if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+		if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
+			return ctrl.Result{}, ignoreNotFound(err)
 		}
-
-		return ctrl.Result{}, err
 	}
 
 	apks := &momov1alpha1.APKList{}
@@ -103,18 +98,14 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	mobileApp.Status.APKs = markLatest(mobileApp.Status.APKs)
-	SetCondition(mobileApp, metav1.Condition{
+	setCondition(mobileApp, metav1.Condition{
 		Type:   "AggregatedAPKs",
 		Reason: "GotAPKs",
 		Status: metav1.ConditionTrue,
 	})
 
 	if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
 	ipas := &momov1alpha1.IPAList{}
@@ -146,18 +137,14 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	mobileApp.Status.IPAs = markLatest(mobileApp.Status.IPAs)
-	SetCondition(mobileApp, metav1.Condition{
+	setCondition(mobileApp, metav1.Condition{
 		Type:   "AggregatedIPAs",
 		Reason: "GotIPAs",
 		Status: metav1.ConditionTrue,
 	})
 
 	if err := r.Client.Status().Update(ctx, mobileApp); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
 	if mobileApp.Spec.UniversalLinks.Ingress.Host != "" {
@@ -416,13 +403,13 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, err
 		}
 
-		SetCondition(mobileApp, metav1.Condition{
+		setCondition(mobileApp, metav1.Condition{
 			Type:   "CreatedOrUpdatedWellKnown",
 			Reason: "Created",
 			Status: metav1.ConditionTrue,
 		})
 	} else {
-		SetCondition(mobileApp, metav1.Condition{
+		setCondition(mobileApp, metav1.Condition{
 			Type:   "CreatedOrUpdatedWellKnown",
 			Reason: "Skipped",
 			Status: metav1.ConditionFalse,
@@ -431,7 +418,7 @@ func (r *MobileAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	mobileApp.Status.Phase = momov1alpha1.PhaseReady
 
-	return ctrl.Result{}, r.Client.Status().Update(ctx, mobileApp)
+	return ctrl.Result{}, ignoreNotFound(r.Client.Status().Update(ctx, mobileApp))
 }
 
 func markLatest(apps []momov1alpha1.MobileAppStatusApp) []momov1alpha1.MobileAppStatusApp {
@@ -458,7 +445,7 @@ func (r *MobileAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Client = mgr.GetClient()
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&momov1alpha1.MobileApp{}).
+		For(&momov1alpha1.MobileApp{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&momov1alpha1.APK{}, r.BinaryEventHandler()).
 		Watches(&momov1alpha1.IPA{}, r.BinaryEventHandler()).
 		Watches(&v1.Issuer{}, r.IssuerEventHandler()).

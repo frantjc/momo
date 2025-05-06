@@ -12,9 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // BucketReconciler reconciles a Bucket object
@@ -25,7 +27,6 @@ type BucketReconciler struct {
 
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=buckets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=momo.frantj.cc,resources=buckets/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=momo.frantj.cc,resources=buckets/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=configmaps;secrets,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -37,21 +38,15 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	)
 
 	if err := r.Get(ctx, req.NamespacedName, bucket); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
-		}
-
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	bucket.Status.Phase = momov1alpha1.PhasePending
+	if bucket.Status.Phase != momov1alpha1.PhasePending {
+		bucket.Status.Phase = momov1alpha1.PhasePending
 
-	if err := r.Client.Status().Update(ctx, bucket); err != nil {
-		if apierrors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+		if err := r.Client.Status().Update(ctx, bucket); err != nil {
+			return ctrl.Result{}, ignoreNotFound(err)
 		}
-
-		return ctrl.Result{}, err
 	}
 
 	if _, err := momoutil.OpenBucket(ctx, r.Client, bucket); err != nil {
@@ -60,24 +55,28 @@ func (r *BucketReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		bucket.Status.Phase = momov1alpha1.PhaseFailed
-		SetCondition(bucket, metav1.Condition{
+		setCondition(bucket, metav1.Condition{
 			Type:    "Opened",
 			Reason:  "FailedToOpen",
 			Status:  metav1.ConditionFalse,
 			Message: err.Error(),
 		})
 
-		return ctrl.Result{}, r.Client.Status().Update(ctx, bucket)
+		return ctrl.Result{}, ignoreNotFound(r.Client.Status().Update(ctx, bucket))
 	}
 
 	bucket.Status.Phase = momov1alpha1.PhaseReady
-	SetCondition(bucket, metav1.Condition{
+	setCondition(bucket, metav1.Condition{
 		Type:   "Opened",
 		Reason: "BucketOpened",
 		Status: metav1.ConditionTrue,
 	})
 
-	return ctrl.Result{RequeueAfter: time.Minute * 9}, r.Client.Status().Update(ctx, bucket)
+	if err := r.Client.Status().Update(ctx, bucket); err != nil {
+		return ctrl.Result{}, ignoreNotFound(err)
+	}
+
+	return ctrl.Result{RequeueAfter: time.Minute * 9}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -85,7 +84,7 @@ func (r *BucketReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Client = mgr.GetClient()
 	r.EventRecorder = mgr.GetEventRecorderFor("momo")
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&momov1alpha1.Bucket{}).
+		For(&momov1alpha1.Bucket{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&corev1.Secret{}, r.EventHandler(func(bucket momov1alpha1.Bucket, obj client.Object) bool {
 			return bucket.Namespace == obj.GetNamespace() &&
 				bucket.Spec.URLFrom != nil &&
@@ -119,32 +118,4 @@ func (r *BucketReconciler) EventHandler(filter func(bucket momov1alpha1.Bucket, 
 			},
 		)
 	})
-}
-
-type ConditionsAware interface {
-	GetGeneration() int64
-	GetConditions() []metav1.Condition
-	SetConditions(conditions []metav1.Condition)
-}
-
-func SetCondition(conditionsAware ConditionsAware, condition metav1.Condition) {
-	conditions := conditionsAware.GetConditions()
-	if conditions == nil {
-		conditions = []metav1.Condition{}
-	}
-
-	for i, c := range conditions {
-		if c.Type == condition.Type {
-			if c.Message != condition.Message || c.Reason != condition.Reason || c.Status != condition.Status {
-				condition.LastTransitionTime = metav1.Now()
-				condition.ObservedGeneration = conditionsAware.GetGeneration()
-				conditions[i] = condition
-				conditionsAware.SetConditions(conditions)
-			}
-			return
-		}
-	}
-
-	conditions = append(conditions, condition)
-	conditionsAware.SetConditions(conditions)
 }

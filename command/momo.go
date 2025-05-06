@@ -14,6 +14,7 @@ import (
 	"time"
 
 	_ "github.com/928799934/go-png-cgbi"
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/frantjc/momo"
 	"github.com/frantjc/momo/android"
 	momov1alpha1 "github.com/frantjc/momo/api/v1alpha1"
@@ -129,7 +130,7 @@ func NewControl() *cobra.Command {
 					})
 				}
 
-				scheme, err := momoutil.NewScheme(momov1alpha1.AddToScheme, clientgoscheme.AddToScheme)
+				scheme, err := momoutil.NewScheme(momov1alpha1.AddToScheme, clientgoscheme.AddToScheme, certmanagerv1.AddToScheme)
 				if err != nil {
 					return err
 				}
