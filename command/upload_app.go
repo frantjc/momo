@@ -131,7 +131,7 @@ func newUploadApp(name string) *cobra.Command {
 							case momo.ExtIPA:
 								mediaType = ios.ContentTypeIPA
 							default:
-								return fmt.Errorf("unable to determine if %s is an .apk or .ipa", file)
+								return fmt.Errorf("unable to determine if %s is an %s or %s", file, momo.ExtAPK, momo.ExtIPA)
 							}
 						}
 

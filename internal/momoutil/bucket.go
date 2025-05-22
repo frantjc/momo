@@ -160,10 +160,6 @@ func NewHTTPStatusCodeError(err error, httpStatusCode int) error {
 		return nil
 	}
 
-	if 600 <= httpStatusCode || httpStatusCode < 100 {
-		httpStatusCode = 500
-	}
-
 	return &httpStatusCodeError{
 		err:            err,
 		httpStatusCode: httpStatusCode,

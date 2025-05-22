@@ -57,6 +57,10 @@ func (i IPA) GetIcons() []AppStatusIcon {
 	return i.Status.Icons
 }
 
+func (i IPA) SetPhase(phase string) {
+	i.Status.Phase = phase
+}
+
 // +kubebuilder:object:root=true
 
 // IPAList contains a list of IPA.

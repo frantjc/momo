@@ -102,8 +102,13 @@ func (a *APKDecoder) Manifest(ctx context.Context) (*Manifest, error) {
 		return nil, err
 	}
 
-	a.manifest = &Manifest{}
-	return a.manifest, xml.NewDecoder(file).Decode(a.manifest)
+	manifest := &Manifest{}
+	if err := xml.NewDecoder(file).Decode(manifest); err != nil {
+		return nil, err
+	}
+	a.manifest = manifest
+
+	return manifest, err
 }
 
 func (a *APKDecoder) Metadata(ctx context.Context) (*apktool.Metadata, error) {

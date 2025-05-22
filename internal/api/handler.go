@@ -370,14 +370,14 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 	switch ext {
 	case momo.ExtAPK:
 		if apk.Key == "" {
-			return fmt.Errorf("app does not have an .apk")
+			return fmt.Errorf("app does not have an %s", momo.ExtAPK)
 		}
 		key = apk.Key
 		bucketName = apk.Bucket.Name
 		contentType = android.ContentTypeAPK
 	case momo.ExtIPA:
 		if ipa.Key == "" {
-			return fmt.Errorf("app does not have an .ipa")
+			return fmt.Errorf("app does not have an %s", momo.ExtIPA)
 		}
 		key = ipa.Key
 		bucketName = ipa.Bucket.Name
@@ -450,7 +450,7 @@ func (h *handler) handleFiles(w http.ResponseWriter, r *http.Request) error {
 	default:
 		if file == momo.FileManifestPlist {
 			if ipa.Key == "" {
-				return fmt.Errorf("app does not have an .ipa")
+				return fmt.Errorf("app does not have an %s", momo.ExtIPA)
 			}
 
 			cr := &momov1alpha1.IPA{}
