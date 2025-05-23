@@ -68,6 +68,10 @@ func (a APK) GetIcons() []AppStatusIcon {
 	return a.Status.Icons
 }
 
+func (a APK) SetPhase(phase string) {
+	a.Status.Phase = phase
+}
+
 // +kubebuilder:object:root=true
 
 // APKList contains a list of APK.

@@ -6,8 +6,6 @@ services:
       - ctrl
     volumes:
       - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config
-    environment:
-      AWS_REGION: us-east-1
     depends_on:
       - minio
   momo-srv:
@@ -22,8 +20,6 @@ services:
       - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config
     ports:
       - 8080:8080
-    environment:
-      AWS_REGION: us-east-1
     depends_on:
       - minio
   minio:

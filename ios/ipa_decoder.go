@@ -60,8 +60,12 @@ func (i *IPADecoder) infoFromZipReader(zr *zip.Reader) (*Info, error) {
 			}
 
 			i.infoDir = filepath.Dir(zf.Name)
-			i.info = &Info{}
-			return i.info, plist.NewDecoder(bytes.NewReader(b)).Decode(i.info)
+			info := &Info{}
+			if err := plist.NewDecoder(bytes.NewReader(b)).Decode(info); err != nil {
+				return nil, err
+			}
+			i.info = info
+			return info, nil
 		}
 	}
 

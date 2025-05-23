@@ -28,7 +28,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        <div className="isolate">
+          <div className="max-w-screen overflow-x-hidden">
+            <header className="border-b border-gray-500">
+              <nav className="flex h-14 items-center justify-between px-4">
+                <a className="text-2xl font-bold hover:text-gray-500" aria-label="Home" href="/">Momo</a>
+              </nav>
+            </header>
+            <main className="min-h-dvh container mx-auto px-2 tracking-wider">
+              {children}
+            </main>
+          </div>
+        </div>
         <ScrollRestoration />
         <Scripts />
       </body>
