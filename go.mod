@@ -11,7 +11,7 @@ require (
 	github.com/cert-manager/cert-manager v1.17.2
 	github.com/frantjc/x v0.0.0-20250225205746-368b1b207450
 	github.com/go-chi/chi v4.1.2+incompatible
-	github.com/go-logr/logr v1.4.2
+	github.com/go-logr/logr v1.4.3
 	github.com/google/uuid v1.6.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/spf13/cobra v1.9.1
