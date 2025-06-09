@@ -17,7 +17,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/timewasted/go-accept-headers v0.0.0-20130320203746-c78f304b1b09
 	gocloud.dev v0.41.0
-	golang.org/x/mod v0.24.0
+	golang.org/x/mod v0.25.0
 	golang.org/x/sync v0.14.0
 	gopkg.in/yaml.v3 v3.0.1
 	howett.net/plist v1.0.1
