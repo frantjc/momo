@@ -6,7 +6,7 @@ godebug default=go1.24
 
 require (
 	github.com/928799934/go-png-cgbi v1.0.0
-	github.com/cert-manager/cert-manager v1.19.0
+	github.com/cert-manager/cert-manager v1.19.1
 	github.com/frantjc/x v0.0.0-20250225205746-368b1b207450
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-logr/logr v1.4.3
